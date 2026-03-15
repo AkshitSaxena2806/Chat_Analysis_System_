@@ -1,6 +1,7 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd  # This import was missing
 import Chat_Analysis
 import helper
 import zipfile
@@ -9,6 +10,9 @@ from pathlib import Path
 import tempfile
 
 st.set_page_config(page_title="Chat Analysis System", layout="wide")
+
+# Suppress deprecation warnings
+st.set_option('deprecation.showPyplotGlobalUse', False)
 
 st.sidebar.title("Chat Analysis")
 
@@ -114,18 +118,20 @@ if uploaded_file or uploaded_zip:
             # Monthly Timeline
             st.subheader("📅 Monthly Timeline")
             mt = helper.monthly_timelines(selected_user, df)
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.plot(mt["time"], mt["message"], color='green', marker='o', linewidth=2)
-            plt.xticks(rotation=90)
-            plt.xlabel("Time")
-            plt.ylabel("Number of Messages")
-            plt.grid(True, alpha=0.3)
-            st.pyplot(fig)
+            if mt is not None and not mt.empty:
+                fig, ax = plt.subplots(figsize=(12, 6))
+                ax.plot(mt["time"], mt["message"], color='green', marker='o', linewidth=2)
+                plt.xticks(rotation=90)
+                plt.xlabel("Time")
+                plt.ylabel("Number of Messages")
+                plt.grid(True, alpha=0.3)
+                st.pyplot(fig)
+                plt.close()
             
             # Daily Timeline
             st.subheader("📆 Daily Timeline")
-            daily_timeline = helper.daily_timeline(selected_user, df) if hasattr(helper, 'daily_timeline') else None
-            if daily_timeline is not None:
+            daily_timeline = helper.daily_timeline(selected_user, df)
+            if daily_timeline is not None and not daily_timeline.empty:
                 fig, ax = plt.subplots(figsize=(15, 6))
                 ax.plot(daily_timeline['only_date'], daily_timeline['message'], color='black', linewidth=1)
                 plt.xticks(rotation=90)
@@ -133,6 +139,7 @@ if uploaded_file or uploaded_zip:
                 plt.ylabel("Number of Messages")
                 plt.grid(True, alpha=0.3)
                 st.pyplot(fig)
+                plt.close()
             
             # Activity Map (Weekly and Monthly)
             st.subheader("🗺️ Activity Map")
@@ -140,45 +147,50 @@ if uploaded_file or uploaded_zip:
             
             with col1:
                 st.markdown("**Most Busy Day**")
-                busy_day = helper.week_activity_map(selected_user, df) if hasattr(helper, 'week_activity_map') else None
-                if busy_day is not None:
+                busy_day = helper.week_activity_map(selected_user, df)
+                if busy_day is not None and not busy_day.empty:
                     fig, ax = plt.subplots()
                     ax.bar(busy_day.index, busy_day.values, color='purple')
                     plt.xticks(rotation=45)
                     plt.xlabel("Day")
                     plt.ylabel("Message Count")
                     st.pyplot(fig)
+                    plt.close()
             
             with col2:
                 st.markdown("**Most Busy Month**")
-                busy_month = helper.month_activity_map(selected_user, df) if hasattr(helper, 'month_activity_map') else None
-                if busy_month is not None:
+                busy_month = helper.month_activity_map(selected_user, df)
+                if busy_month is not None and not busy_month.empty:
                     fig, ax = plt.subplots()
                     ax.bar(busy_month.index, busy_month.values, color='orange')
                     plt.xticks(rotation=45)
                     plt.xlabel("Month")
                     plt.ylabel("Message Count")
                     st.pyplot(fig)
+                    plt.close()
             
             # Weekly Activity Heatmap
             st.subheader("🔥 Weekly Activity Heatmap")
-            user_heatmap = helper.activity_heatmap(selected_user, df) if hasattr(helper, 'activity_heatmap') else None
-            if user_heatmap is not None:
+            user_heatmap = helper.activity_heatmap(selected_user, df)
+            if user_heatmap is not None and not user_heatmap.empty:
                 fig, ax = plt.subplots(figsize=(12, 6))
                 sns.heatmap(user_heatmap, cmap='YlOrRd', annot=True, fmt='g', ax=ax)
                 plt.xlabel("Period")
                 plt.ylabel("Day")
                 st.pyplot(fig)
+                plt.close()
             
-            # Weekly Activity (Bar Chart) - Your existing
+            # Weekly Activity (Bar Chart)
             st.subheader("📊 Weekly Activity")
             wd = helper.day_timelines(selected_user, df)
-            fig, ax = plt.subplots()
-            ax.bar(wd["day_name"], wd["message"], color='skyblue')
-            plt.xticks(rotation=45)
-            plt.xlabel("Day")
-            plt.ylabel("Message Count")
-            st.pyplot(fig)
+            if wd is not None and not wd.empty:
+                fig, ax = plt.subplots()
+                ax.bar(wd["day_name"], wd["message"], color='skyblue')
+                plt.xticks(rotation=45)
+                plt.xlabel("Day")
+                plt.ylabel("Message Count")
+                st.pyplot(fig)
+                plt.close()
             
             # Most Busy Users (Group Level)
             if selected_user == 'Overall':
@@ -193,6 +205,7 @@ if uploaded_file or uploaded_zip:
                     plt.xlabel("Users")
                     plt.ylabel("Message Count")
                     st.pyplot(fig)
+                    plt.close()
                 
                 with col2:
                     st.dataframe(new_df, use_container_width=True)
@@ -200,21 +213,24 @@ if uploaded_file or uploaded_zip:
             # Word Cloud
             st.subheader("☁️ Word Cloud")
             wc = helper.workcloud(selected_user, df)
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.imshow(wc)
-            ax.axis("off")
-            st.pyplot(fig)
+            if wc is not None:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.imshow(wc)
+                ax.axis("off")
+                st.pyplot(fig)
+                plt.close()
             
             # Most Common Words
             st.subheader("📝 Most Common Words")
-            most_common_df = helper.most_common_words(selected_user, df) if hasattr(helper, 'most_common_words') else None
-            if most_common_df is not None:
+            most_common_df = helper.most_common_words(selected_user, df)
+            if most_common_df is not None and not most_common_df.empty:
                 fig, ax = plt.subplots(figsize=(10, 8))
                 ax.barh(most_common_df[0][:20], most_common_df[1][:20], color='teal')
                 plt.xlabel("Frequency")
                 plt.ylabel("Words")
                 plt.gca().invert_yaxis()
                 st.pyplot(fig)
+                plt.close()
             
             # Emoji Analysis
             st.subheader("😊 Emoji Analysis")
@@ -223,17 +239,20 @@ if uploaded_file or uploaded_zip:
             emoji_df = helper.emojies(selected_user, df)
             
             with col1:
-                st.dataframe(emoji_df, use_container_width=True)
+                if emoji_df is not None and not emoji_df.empty:
+                    st.dataframe(emoji_df, use_container_width=True)
             
             with col2:
-                if not emoji_df.empty:
+                if emoji_df is not None and not emoji_df.empty:
                     fig, ax = plt.subplots()
                     # Show top 5 emojis in pie chart
                     top_emojis = emoji_df.head(5)
-                    ax.pie(top_emojis[top_emojis.columns[1]], 
-                          labels=top_emojis[top_emojis.columns[0]], 
-                          autopct="%0.2f%%")
-                    st.pyplot(fig)
+                    if len(top_emojis) > 0:
+                        ax.pie(top_emojis[top_emojis.columns[1]], 
+                              labels=top_emojis[top_emojis.columns[0]], 
+                              autopct="%0.2f%%")
+                        st.pyplot(fig)
+                        plt.close()
 
     elif df is None and not errors:
         st.error("Could not process the file(s). Please check the format.")
