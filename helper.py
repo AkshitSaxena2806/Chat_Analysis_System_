@@ -31,13 +31,18 @@ def fetch_stats(selected_user, df):
 
 def most_busy_users(df):
     x = df['user'].value_counts().head()
-    df = round((df['user'].value_counts() / df.shape[0]) * 100, 2).reset_index().rename(
-        columns={'index': 'name', 'user': 'percent'})
-    return x, df
+    new_df = round((df['user'].value_counts() / df.shape[0]) * 100, 2).reset_index().rename(
+        columns={'user': 'name', 'count': 'percent'})
+    return x, new_df
 
 def workcloud(selected_user, df):
-    f = open('stop_hinglish.txt', 'r')
-    stop_words = f.read()
+    try:
+        f = open('stop_hinglish.txt', 'r')
+        stop_words = f.read()
+        f.close()
+    except FileNotFoundError:
+        # Create default stop words if file doesn't exist
+        stop_words = "the a an and or but in on at to for of with by from up about into through during before after is are was were be been being have has had do does did will would shall should may might must can could i you he she it we they them their your my his her its this that these those"
     
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
@@ -58,8 +63,12 @@ def workcloud(selected_user, df):
     return df_wc
 
 def most_common_words(selected_user, df):
-    f = open('stop_hinglish.txt', 'r')
-    stop_words = f.read()
+    try:
+        f = open('stop_hinglish.txt', 'r')
+        stop_words = f.read()
+        f.close()
+    except FileNotFoundError:
+        stop_words = "the a an and or but in on at to for of with by from up about into through during before after is are was were be been being have has had do does did will would shall should may might must can could i you he she it we they them their your my his her its this that these those"
     
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
@@ -82,7 +91,7 @@ def emojies(selected_user, df):
     
     emojis = []
     for message in df['message']:
-        emojis.extend([c for c in message if c in emoji.UNICODE_EMOJI['en']])
+        emojis.extend([c for c in message if c in emoji.EMOJI_DATA])
     
     emoji_df = pd.DataFrame(Counter(emojis).most_common(len(Counter(emojis))))
     return emoji_df
@@ -129,6 +138,10 @@ def month_activity_map(selected_user, df):
 def activity_heatmap(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
+    
+    # Check if required columns exist
+    if 'day_name' not in df.columns or 'period' not in df.columns:
+        return pd.DataFrame()
     
     user_heatmap = df.pivot_table(index='day_name', columns='period', values='message', aggfunc='count').fillna(0)
     return user_heatmap
