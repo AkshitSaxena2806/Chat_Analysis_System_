@@ -186,7 +186,8 @@ def activity_heatmap(selected_user, df):
     )
     
     # Reorder periods logically
-    period_order = ['Late Night', 'Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night']
+    period_order = ['Late Night (0-4)', 'Early Morning (4-8)', 'Morning (8-12)', 
+                    'Afternoon (12-16)', 'Evening (16-20)', 'Night (20-24)']
     pivot_table = pivot_table.reindex(columns=[p for p in period_order if p in pivot_table.columns])
     
     return pivot_table
