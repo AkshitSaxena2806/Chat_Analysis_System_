@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 from wordcloud import WordCloud
 import base64
 from io import BytesIO
+import emoji
 
 # Page configuration
 st.set_page_config(
@@ -114,6 +115,7 @@ with st.sidebar:
     with st.expander("⚙️ Advanced Options"):
         show_stopwords = st.checkbox("Show stopwords", value=False)
         max_words = st.slider("Max words in wordcloud", 100, 500, 200)
+        min_word_length = st.slider("Minimum word length", 2, 5, 3)
         color_theme = st.selectbox(
             "Color theme",
             ["Default", "Dark", "Light", "Colorful"]
@@ -396,7 +398,7 @@ if uploaded_file or uploaded_zip:
             
             with col1:
                 st.subheader("☁️ Word Cloud")
-                wc = helper.workcloud(selected_user, df, max_words=max_words)
+                wc = helper.workcloud(selected_user, df, max_words=max_words, min_word_length=min_word_length)
                 if wc is not None:
                     fig, ax = plt.subplots(figsize=(10, 6))
                     ax.imshow(wc)
@@ -406,12 +408,12 @@ if uploaded_file or uploaded_zip:
             
             with col2:
                 st.subheader("📊 Most Common Words")
-                most_common_df = helper.most_common_words(selected_user, df)
+                most_common_df = helper.most_common_words(selected_user, df, min_word_length=min_word_length)
                 if most_common_df is not None and not most_common_df.empty:
-                    fig = px.bar(most_common_df.head(15), x=1, y=0,
+                    fig = px.bar(most_common_df.head(15), x='Frequency', y='Word',
                                orientation='h',
-                               title='Top 15 Common Words',
-                               labels={0: 'Words', 1: 'Frequency'})
+                               title=f'Top 15 Common Words (min {min_word_length} chars)',
+                               labels={'Word': 'Words', 'Frequency': 'Frequency'})
                     fig.update_layout(yaxis={'categoryorder':'total ascending'})
                     st.plotly_chart(fig, use_container_width=True)
             
@@ -426,8 +428,16 @@ if uploaded_file or uploaded_zip:
             with col1:
                 if emoji_df is not None and not emoji_df.empty:
                     st.subheader("Emoji Usage Stats")
+                    # Display emojis properly with HTML to ensure they render
+                    emoji_display = emoji_df.copy()
+                    emoji_display['Emoji with Name'] = emoji_display['Emoji'].apply(
+                        lambda x: f"{x} ({emoji.demojize(x).replace(':', '').replace('_', ' ')})"
+                    )
+                    display_df = emoji_display[['Emoji with Name', 'Count']].rename(
+                        columns={'Emoji with Name': 'Emoji', 'Count': 'Count'}
+                    )
                     st.dataframe(
-                        emoji_df.rename(columns={0: 'Emoji', 1: 'Count'}),
+                        display_df,
                         use_container_width=True
                     )
             
@@ -435,8 +445,15 @@ if uploaded_file or uploaded_zip:
                 if emoji_df is not None and not emoji_df.empty:
                     st.subheader("Top Emojis")
                     top_emojis = emoji_df.head(8)
-                    fig = px.pie(values=top_emojis[1], names=top_emojis[0],
-                                title='Top 8 Emojis Distribution')
+                    
+                    # Create pie chart with emoji labels
+                    fig = go.Figure(data=[go.Pie(
+                        labels=top_emojis['Emoji'],
+                        values=top_emojis['Count'],
+                        texttemplate='%{label}',
+                        textposition='inside'
+                    )])
+                    fig.update_layout(title='Top 8 Emojis Distribution')
                     st.plotly_chart(fig, use_container_width=True)
             
             progress_bar.progress(100)
