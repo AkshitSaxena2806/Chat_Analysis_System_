@@ -28,8 +28,7 @@ def fetch_stats(selected_user, df):
 
 def most_busy_users(df):
     x = df['user'].value_counts().head(10)
-    new_df = round((df['user'].value_counts() / df.shape[0]) * 100, 2).reset_index().rename(
-        columns={'count': 'name', 'user': 'percent'})
+    new_df = round((df['user'].value_counts() / df.shape[0]) * 100, 2).reset_index()
     new_df.columns = ['User', 'Percentage']
     return x, new_df
 
@@ -57,7 +56,8 @@ def workcloud(selected_user, df, max_words=200):
     
     temp['message'] = temp['message'].apply(remove_stop_words)
     
-    wc = WordConfig(
+    # Fixed: Changed WordConfig to WordCloud
+    wc = WordCloud(
         width=800, 
         height=400, 
         max_words=max_words,
