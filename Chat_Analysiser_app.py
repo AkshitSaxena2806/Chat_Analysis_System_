@@ -254,42 +254,49 @@ if uploaded_file or uploaded_zip:
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.markdown("""
+                st.markdown(f"""
                 <div class="stat-card">
-                    <div class="stat-number">{}</div>
+                    <div class="stat-number">{num}</div>
                     <div class="stat-label">Total Messages</div>
                 </div>
-                """.format(num), unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             
             with col2:
-                st.markdown("""
+                st.markdown(f"""
                 <div class="stat-card">
-                    <div class="stat-number">{}</div>
+                    <div class="stat-number">{words}</div>
                     <div class="stat-label">Total Words</div>
                 </div>
-                """.format(words), unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             
             with col3:
-                st.markdown("""
+                st.markdown(f"""
                 <div class="stat-card">
-                    <div class="stat-number">{}</div>
+                    <div class="stat-number">{media}</div>
                     <div class="stat-label">Media Shared</div>
                 </div>
-                """.format(media), unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             
             with col4:
-                st.markdown("""
+                st.markdown(f"""
                 <div class="stat-card">
-                    <div class="stat-number">{}</div>
+                    <div class="stat-number">{links}</div>
                     <div class="stat-label">Links Shared</div>
                 </div>
-                """.format(links), unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             
             # Quick insights
             st.markdown("## 💡 Quick Insights")
             with st.container():
                 avg_words_per_msg = round(words/num if num>0 else 0, 2)
                 media_percentage = round((media/num)*100 if num>0 else 0, 2)
+                
+                # Get activity maps safely
+                week_map = helper.week_activity_map(selected_user, df)
+                month_map = helper.month_activity_map(selected_user, df)
+                
+                most_active_day = week_map.idxmax() if not week_map.empty else "N/A"
+                most_active_month = month_map.idxmax() if not month_map.empty else "N/A"
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -306,8 +313,8 @@ if uploaded_file or uploaded_zip:
                     st.markdown(f"""
                     <div class="insight-box">
                         <h4>⏰ Activity Summary</h4>
-                        <p>• Most active day: <b>{helper.week_activity_map(selected_user, df).idxmax() if not helper.week_activity_map(selected_user, df).empty else "N/A"}</b></p>
-                        <p>• Most active month: <b>{helper.month_activity_map(selected_user, df).idxmax() if not helper.month_activity_map(selected_user, df).empty else "N/A"}</b></p>
+                        <p>• Most active day: <b>{most_active_day}</b></p>
+                        <p>• Most active month: <b>{most_active_month}</b></p>
                     </div>
                     """, unsafe_allow_html=True)
             
