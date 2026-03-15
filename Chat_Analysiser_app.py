@@ -1,59 +1,134 @@
-import streamlit as st
-import matplotlib.pyplot as plt
-import Chat_Analysis
-import helper
+from urlextract import URLExtract
+from wordcloud import WordCloud
+import pandas as pd
+from collections import Counter
+import emoji
+import re
 
-st.set_page_config(page_title="Chat Analysis System", layout="wide")
+extractor = URLExtract()
 
-st.sidebar.title("Chat Analysis")
-uploaded_file = st.sidebar.file_uploader("Upload WhatsApp chat (.txt)", type="txt")
+def fetch_stats(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    # Fetch number of messages
+    num_messages = df.shape[0]
+    
+    # Fetch number of words
+    words = []
+    for message in df['message']:
+        words.extend(message.split())
+    
+    # Fetch number of media messages
+    num_media_messages = df[df['message'] == '<Media omitted>\n'].shape[0]
+    
+    # Fetch number of links
+    links = []
+    for message in df['message']:
+        links.extend(extractor.find_urls(message))
+    
+    return num_messages, len(words), num_media_messages, len(links)
 
-if uploaded_file:
-    data = uploaded_file.getvalue().decode("utf-8")
-    df = Chat_Analysis.preprocess(data)
+def most_busy_users(df):
+    x = df['user'].value_counts().head()
+    df = round((df['user'].value_counts() / df.shape[0]) * 100, 2).reset_index().rename(
+        columns={'index': 'name', 'user': 'percent'})
+    return x, df
 
-    if df.empty:
-        st.error("Chat format not supported.")
-        st.stop()
+def workcloud(selected_user, df):
+    f = open('stop_hinglish.txt', 'r')
+    stop_words = f.read()
+    
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    temp = df[df['user'] != 'group_notification']
+    temp = temp[temp['message'] != '<Media omitted>\n']
+    
+    def remove_stop_words(message):
+        y = []
+        for word in message.lower().split():
+            if word not in stop_words:
+                y.append(word)
+        return " ".join(y)
+    
+    wc = WordCloud(width=500, height=500, min_font_size=10, background_color='white')
+    temp['message'] = temp['message'].apply(remove_stop_words)
+    df_wc = wc.generate(temp['message'].str.cat(sep=" "))
+    return df_wc
 
-    users = df["user"].unique().tolist()
-    if "group_notification" in users:
-        users.remove("group_notification")
+def most_common_words(selected_user, df):
+    f = open('stop_hinglish.txt', 'r')
+    stop_words = f.read()
+    
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    temp = df[df['user'] != 'group_notification']
+    temp = temp[temp['message'] != '<Media omitted>\n']
+    
+    words = []
+    for message in temp['message']:
+        for word in message.lower().split():
+            if word not in stop_words:
+                words.append(word)
+    
+    most_common_df = pd.DataFrame(Counter(words).most_common(20))
+    return most_common_df
 
-    users.sort()
-    users.insert(0, "Overall")
+def emojies(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    emojis = []
+    for message in df['message']:
+        emojis.extend([c for c in message if c in emoji.UNICODE_EMOJI['en']])
+    
+    emoji_df = pd.DataFrame(Counter(emojis).most_common(len(Counter(emojis))))
+    return emoji_df
 
-    selected_user = st.sidebar.selectbox("Select User", users)
+def monthly_timelines(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    timeline = df.groupby(['year', 'month_num', 'month']).count()['message'].reset_index()
+    
+    time = []
+    for i in range(timeline.shape[0]):
+        time.append(timeline['month'][i] + "-" + str(timeline['year'][i]))
+    
+    timeline['time'] = time
+    return timeline
 
-    if st.sidebar.button("Show Analysis"):
-        st.title("📊 Chat Analysis System")
+def day_timelines(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    timeline = df.groupby('day_name').count()['message'].reset_index()
+    return timeline
 
-        num, words, media, links = helper.fetch_stats(selected_user, df)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Messages", num)
-        c2.metric("Words", words)
-        c3.metric("Media", media)
-        c4.metric("Links", links)
+def daily_timeline(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    daily_timeline = df.groupby('only_date').count()['message'].reset_index()
+    return daily_timeline
 
-        st.subheader("Monthly Activity")
-        mt = helper.monthly_timelines(selected_user, df)
-        fig, ax = plt.subplots()
-        ax.plot(mt["time"], mt["message"])
-        plt.xticks(rotation=90)
-        st.pyplot(fig)
+def week_activity_map(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    return df['day_name'].value_counts()
 
-        st.subheader("Weekly Activity")
-        wd = helper.day_timelines(selected_user, df)
-        fig, ax = plt.subplots()
-        ax.bar(wd["day_name"], wd["message"])
-        st.pyplot(fig)
+def month_activity_map(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    return df['month'].value_counts()
 
-        st.subheader("Word Cloud")
-        wc = helper.workcloud(selected_user, df)
-        fig, ax = plt.subplots()
-        ax.imshow(wc)
-        ax.axis("off")
-        st.pyplot(fig)
-
-        st.subheader("Emoji Analysis")
-        st.dataframe(helper.emojies(selected_user, df))
+def activity_heatmap(selected_user, df):
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+    
+    user_heatmap = df.pivot_table(index='day_name', columns='period', values='message', aggfunc='count').fillna(0)
+    return user_heatmap
