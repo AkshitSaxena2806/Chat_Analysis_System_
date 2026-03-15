@@ -2,7 +2,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-import Chat_Analysis  # Make sure this matches your filename (Chat_Analysis.py)
+import Chat_Analysis
 import helper
 import zipfile
 import os
@@ -11,8 +11,8 @@ import tempfile
 
 st.set_page_config(page_title="Chat Analysis System", layout="wide")
 
-# Suppress deprecation warnings
-st.set_option('deprecation.showPyplotGlobalUse', False)
+# Remove this line as it's causing the error
+# st.set_option('deprecation.showPyplotGlobalUse', False)
 
 st.sidebar.title("Chat Analysis")
 
