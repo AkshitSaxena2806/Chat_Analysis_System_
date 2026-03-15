@@ -16,9 +16,10 @@ def fetch_stats(selected_user, df):
     
     words = []
     for message in df['message']:
-        words.extend(message.split())
+        # Split by spaces and filter out empty strings
+        words.extend([word for word in message.split() if word.strip()])
     
-    num_media_messages = df[df['message'] == '<Media omitted>\n'].shape[0]
+    num_media_messages = df[df['message'].str.contains('<Media omitted>', na=False)].shape[0]
     
     links = []
     for message in df['message']:
@@ -34,29 +35,45 @@ def most_busy_users(df):
 
 def workcloud(selected_user, df, max_words=200):
     try:
-        with open('stop_hinglish.txt', 'r') as f:
-            stop_words = f.read().split()
+        with open('stop_hinglish.txt', 'r', encoding='utf-8') as f:
+            stop_words = set(f.read().split())
     except FileNotFoundError:
-        stop_words = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
                      'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during',
                      'before', 'after', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
                      'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall',
                      'should', 'may', 'might', 'must', 'can', 'could', 'i', 'you', 'he',
                      'she', 'it', 'we', 'they', 'them', 'their', 'your', 'my', 'his',
-                     'her', 'its', 'this', 'that', 'these', 'those']
+                     'her', 'its', 'this', 'that', 'these', 'those', 'ka', 'ki', 'ke', 
+                     'ko', 'se', 'mein', 'par', 'aur', 'hai', 'hain', 'tha', 'the', 'thi',
+                     'thhe', 'thhi', 'raha', 'rahe', 'rahi', 'kar', 'karke', 'karna',
+                     'hoga', 'hoge', 'hogi', 'sakta', 'sakte', 'sakti', 'chahiye',
+                     'apna', 'tum', 'aap', 'main', 'hum', 'yeh', 'woh', 'kya', 'kyun',
+                     'kaise', 'kahan', 'kab', 'kitna', 'kitne', 'itna', 'utna', 'jab',
+                     'tab', 'jahan', 'tahan', 'jaisa', 'aisa', 'waisa'}
     
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
-    temp = df[df['user'] != 'group_notification']
-    temp = temp[temp['message'] != '<Media omitted>\n']
+    # Remove group notifications and media messages
+    temp = df[~df['user'].str.contains('group_notification', na=False)]
+    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False)]
     
-    def remove_stop_words(message):
-        return " ".join([word for word in message.lower().split() if word not in stop_words])
+    # Remove emojis from text for wordcloud
+    def remove_emojis_and_stopwords(text):
+        # Remove emojis
+        text = ''.join([c for c in text if c not in emoji.EMOJI_DATA])
+        # Remove special characters and digits
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r'\d+', '', text)
+        # Convert to lowercase and split
+        words = text.lower().split()
+        # Remove stop words and short words (less than 3 characters)
+        words = [word for word in words if word not in stop_words and len(word) > 2]
+        return ' '.join(words)
     
-    temp['message'] = temp['message'].apply(remove_stop_words)
+    temp['clean_message'] = temp['message'].apply(remove_emojis_and_stopwords)
     
-    # Fixed: Changed WordConfig to WordCloud
     wc = WordCloud(
         width=800, 
         height=400, 
@@ -64,33 +81,49 @@ def workcloud(selected_user, df, max_words=200):
         min_font_size=10,
         background_color='white',
         colormap='viridis',
-        random_state=42
+        random_state=42,
+        collocations=False  # Prevents grouping of words
     )
     
-    text = " ".join(temp['message'].astype(str))
+    text = " ".join(temp['clean_message'].astype(str))
     if text.strip():
         return wc.generate(text)
     return None
 
 def most_common_words(selected_user, df):
     try:
-        with open('stop_hinglish.txt', 'r') as f:
-            stop_words = f.read().split()
+        with open('stop_hinglish.txt', 'r', encoding='utf-8') as f:
+            stop_words = set(f.read().split())
     except FileNotFoundError:
-        stop_words = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
-                     'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through']
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+                     'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'ka', 
+                     'ki', 'ke', 'ko', 'se', 'mein', 'par', 'aur', 'hai', 'hain', 'tha', 
+                     'the', 'thi', 'raha', 'rahe', 'rahi', 'kar', 'karke', 'karna'}
     
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
-    temp = df[df['user'] != 'group_notification']
-    temp = temp[temp['message'] != '<Media omitted>\n']
+    # Remove group notifications and media messages
+    temp = df[~df['user'].str.contains('group_notification', na=False)]
+    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False)]
     
     words = []
     for message in temp['message']:
-        words.extend([word for word in message.lower().split() if word not in stop_words])
+        # Remove emojis
+        text = ''.join([c for c in message if c not in emoji.EMOJI_DATA])
+        # Remove special characters and digits
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r'\d+', '', text)
+        # Split into words
+        message_words = text.lower().split()
+        # Filter words: min length 3, not in stop words
+        filtered_words = [word for word in message_words 
+                         if word not in stop_words and len(word) > 2]
+        words.extend(filtered_words)
     
-    return pd.DataFrame(Counter(words).most_common(30))
+    # Get top 30 common words
+    common_words = Counter(words).most_common(30)
+    return pd.DataFrame(common_words, columns=['Word', 'Frequency'])
 
 def emojies(selected_user, df):
     if selected_user != 'Overall':
@@ -98,9 +131,12 @@ def emojies(selected_user, df):
     
     emojis = []
     for message in df['message']:
+        # Extract only emojis
         emojis.extend([c for c in message if c in emoji.EMOJI_DATA])
     
-    return pd.DataFrame(Counter(emojis).most_common(20))
+    # Count emojis
+    emoji_counts = Counter(emojis).most_common(20)
+    return pd.DataFrame(emoji_counts, columns=['Emoji', 'Count'])
 
 def monthly_timelines(selected_user, df):
     if selected_user != 'Overall':
