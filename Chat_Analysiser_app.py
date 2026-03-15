@@ -115,7 +115,6 @@ with st.sidebar:
     with st.expander("⚙️ Advanced Options"):
         show_stopwords = st.checkbox("Show stopwords", value=False)
         max_words = st.slider("Max words in wordcloud", 100, 500, 200)
-        min_word_length = st.slider("Minimum word length", 2, 5, 3)
         color_theme = st.selectbox(
             "Color theme",
             ["Default", "Dark", "Light", "Colorful"]
@@ -287,39 +286,6 @@ if uploaded_file or uploaded_zip:
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Quick insights
-            st.markdown("## 💡 Quick Insights")
-            with st.container():
-                avg_words_per_msg = round(words/num if num>0 else 0, 2)
-                media_percentage = round((media/num)*100 if num>0 else 0, 2)
-                
-                # Get activity maps safely
-                week_map = helper.week_activity_map(selected_user, df)
-                month_map = helper.month_activity_map(selected_user, df)
-                
-                most_active_day = week_map.idxmax() if not week_map.empty else "N/A"
-                most_active_month = month_map.idxmax() if not month_map.empty else "N/A"
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"""
-                    <div class="insight-box">
-                        <h4>📝 Message Style</h4>
-                        <p>• Average words per message: <b>{avg_words_per_msg}</b></p>
-                        <p>• Media percentage: <b>{media_percentage}%</b></p>
-                        <p>• Links shared: <b>{links}</b></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown(f"""
-                    <div class="insight-box">
-                        <h4>⏰ Activity Summary</h4>
-                        <p>• Most active day: <b>{most_active_day}</b></p>
-                        <p>• Most active month: <b>{most_active_month}</b></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
             progress_bar.progress(30)
             
             # Timeline Analysis
@@ -398,7 +364,8 @@ if uploaded_file or uploaded_zip:
             
             with col1:
                 st.subheader("☁️ Word Cloud")
-                wc = helper.workcloud(selected_user, df, max_words=max_words, min_word_length=min_word_length)
+                # Remove min_word_length parameter as it's not accepted
+                wc = helper.workcloud(selected_user, df, max_words=max_words)
                 if wc is not None:
                     fig, ax = plt.subplots(figsize=(10, 6))
                     ax.imshow(wc)
@@ -408,11 +375,11 @@ if uploaded_file or uploaded_zip:
             
             with col2:
                 st.subheader("📊 Most Common Words")
-                most_common_df = helper.most_common_words(selected_user, df, min_word_length=min_word_length)
+                most_common_df = helper.most_common_words(selected_user, df)
                 if most_common_df is not None and not most_common_df.empty:
                     fig = px.bar(most_common_df.head(15), x='Frequency', y='Word',
                                orientation='h',
-                               title=f'Top 15 Common Words (min {min_word_length} chars)',
+                               title='Top 15 Common Words',
                                labels={'Word': 'Words', 'Frequency': 'Frequency'})
                     fig.update_layout(yaxis={'categoryorder':'total ascending'})
                     st.plotly_chart(fig, use_container_width=True)
