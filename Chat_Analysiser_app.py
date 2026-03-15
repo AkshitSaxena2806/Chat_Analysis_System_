@@ -1,8 +1,8 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd  # This import was missing
-import Chat_Analysis
+import pandas as pd
+import Chat_Analysis  # Make sure this matches your filename (Chat_Analysis.py)
 import helper
 import zipfile
 import os
