@@ -51,13 +51,6 @@ st.markdown("""
         font-size: 1rem;
         opacity: 0.9;
     }
-    .insight-box {
-        background-color: #f0f2f6;
-        border-left: 5px solid #075e54;
-        padding: 1rem;
-        border-radius: 5px;
-        margin: 1rem 0;
-    }
     .stButton>button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -70,6 +63,12 @@ st.markdown("""
     .stButton>button:hover {
         transform: translateY(-2px);
         box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .metric-container {
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -102,7 +101,7 @@ with st.sidebar:
         uploaded_file = st.file_uploader(
             "Upload WhatsApp chat (.txt)", 
             type="txt",
-            help="Export chat without media from WhatsApp"
+            help="Export chat without media from WhatsApp (supports both 12-hour and 24-hour formats)"
         )
     else:
         uploaded_zip = st.file_uploader(
@@ -113,12 +112,8 @@ with st.sidebar:
     
     # Advanced options
     with st.expander("⚙️ Advanced Options"):
-        show_stopwords = st.checkbox("Show stopwords", value=False)
-        max_words = st.slider("Max words in wordcloud", 100, 500, 200)
-        color_theme = st.selectbox(
-            "Color theme",
-            ["Default", "Dark", "Light", "Colorful"]
-        )
+        max_words = st.slider("Max words in wordcloud", 50, 300, 150)
+        show_media = st.checkbox("Include media messages in wordcloud", value=False)
 
 def process_chat_file(file_content, filename="uploaded_chat.txt"):
     """Process a single chat file"""
@@ -257,7 +252,7 @@ if uploaded_file or uploaded_zip:
             with col1:
                 st.markdown(f"""
                 <div class="stat-card">
-                    <div class="stat-number">{num}</div>
+                    <div class="stat-number">{num:,}</div>
                     <div class="stat-label">Total Messages</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -265,7 +260,7 @@ if uploaded_file or uploaded_zip:
             with col2:
                 st.markdown(f"""
                 <div class="stat-card">
-                    <div class="stat-number">{words}</div>
+                    <div class="stat-number">{words:,}</div>
                     <div class="stat-label">Total Words</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -290,7 +285,7 @@ if uploaded_file or uploaded_zip:
             
             # Timeline Analysis
             st.markdown("## 📈 Timeline Analysis")
-            tab1, tab2, tab3 = st.tabs(["Monthly Timeline", "Daily Timeline", "Hourly Activity"])
+            tab1, tab2, tab3 = st.tabs(["📅 Monthly Timeline", "📆 Daily Timeline", "⏰ Hourly Activity"])
             
             with tab1:
                 mt = helper.monthly_timelines(selected_user, df)
@@ -299,7 +294,11 @@ if uploaded_file or uploaded_zip:
                                  title='Message Activity Over Time',
                                  labels={'time': 'Month-Year', 'message': 'Number of Messages'})
                     fig.update_traces(line_color='#075e54', line_width=3)
-                    fig.update_layout(showlegend=False)
+                    fig.update_layout(
+                        showlegend=False,
+                        xaxis_tickangle=-45,
+                        height=500
+                    )
                     st.plotly_chart(fig, use_container_width=True)
             
             with tab2:
@@ -309,16 +308,49 @@ if uploaded_file or uploaded_zip:
                                 title='Daily Message Count',
                                 labels={'only_date': 'Date', 'message': 'Messages'})
                     fig.update_traces(marker_color='#25D366')
+                    fig.update_layout(
+                        xaxis_tickangle=-45,
+                        height=500
+                    )
                     st.plotly_chart(fig, use_container_width=True)
             
             with tab3:
+                st.subheader("⏰ Hourly Activity Pattern (24-Hour Format)")
                 if 'hour' in df.columns:
                     hourly_activity = df.groupby('hour').count()['message'].reset_index()
-                    fig = px.bar(hourly_activity, x='hour', y='message',
-                                title='Hourly Activity Pattern',
-                                labels={'hour': 'Hour of Day', 'message': 'Messages'})
+                    hourly_activity.columns = ['hour', 'message_count']
+                    
+                    # Create a complete hour range (0-23)
+                    all_hours = pd.DataFrame({'hour': range(24)})
+                    hourly_activity = pd.merge(all_hours, hourly_activity, on='hour', how='left').fillna(0)
+                    
+                    # Convert hour to string for better display
+                    hourly_activity['hour_label'] = hourly_activity['hour'].apply(lambda x: f"{int(x):02d}:00")
+                    
+                    fig = px.bar(hourly_activity, x='hour_label', y='message_count',
+                                title='Messages by Hour of Day (24h format)',
+                                labels={'hour_label': 'Hour of Day', 'message_count': 'Number of Messages'})
                     fig.update_traces(marker_color='#128C7E')
+                    fig.update_xaxes(tickangle=45)
+                    fig.update_layout(height=500)
                     st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Find peak hours
+                    peak_hour = hourly_activity.loc[hourly_activity['message_count'].idxmax(), 'hour']
+                    peak_count = hourly_activity['message_count'].max()
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.info(f"📊 **Peak activity hour**: {int(peak_hour):02d}:00 ({'AM' if peak_hour < 12 else 'PM'})")
+                    with col2:
+                        st.info(f"📈 **Messages at peak hour**: {int(peak_count):,}")
+                    
+                    # Show top 3 active hours
+                    st.write("**Top 3 Most Active Hours:**")
+                    top_hours = hourly_activity.nlargest(3, 'message_count')[['hour', 'message_count']]
+                    for idx, row in top_hours.iterrows():
+                        hour = int(row['hour'])
+                        st.write(f"• {hour:02d}:00 - {hour:02d}:59 ({'AM' if hour < 12 else 'PM'}): {int(row['message_count']):,} messages")
             
             progress_bar.progress(50)
             
@@ -326,11 +358,14 @@ if uploaded_file or uploaded_zip:
             st.markdown("## 🔥 Activity Heatmap")
             user_heatmap = helper.activity_heatmap(selected_user, df)
             if user_heatmap is not None and not user_heatmap.empty:
-                fig, ax = plt.subplots(figsize=(12, 6))
-                sns.heatmap(user_heatmap, cmap='YlOrRd', annot=True, fmt='g', ax=ax, cbar_kws={'label': 'Message Count'})
-                plt.title('Weekly Activity Pattern', fontsize=16, fontweight='bold')
-                plt.ylabel('Day of Week')
-                plt.xlabel('Time Period')
+                fig, ax = plt.subplots(figsize=(14, 6))
+                sns.heatmap(user_heatmap, cmap='YlOrRd', annot=True, fmt='g', ax=ax, 
+                           cbar_kws={'label': 'Message Count'}, linewidths=0.5)
+                plt.title('Weekly Activity Pattern', fontsize=16, fontweight='bold', pad=20)
+                plt.ylabel('Day of Week', fontsize=12)
+                plt.xlabel('Time Period', fontsize=12)
+                plt.xticks(rotation=45, ha='right')
+                plt.yticks(rotation=0)
                 st.pyplot(fig)
                 plt.close()
             
@@ -347,13 +382,16 @@ if uploaded_file or uploaded_zip:
                     fig = px.pie(values=x.values, names=x.index, 
                                 title='Message Distribution by User',
                                 color_discrete_sequence=px.colors.qualitative.Set3)
+                    fig.update_traces(textposition='inside', textinfo='percent+label')
+                    fig.update_layout(height=500)
                     st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.subheader("User Contribution Percentage")
                     st.dataframe(
                         new_df.style.highlight_max(axis=0, color='#90EE90'),
-                        use_container_width=True
+                        use_container_width=True,
+                        height=400
                     )
             
             progress_bar.progress(85)
@@ -364,10 +402,9 @@ if uploaded_file or uploaded_zip:
             
             with col1:
                 st.subheader("☁️ Word Cloud")
-                # Remove min_word_length parameter as it's not accepted
                 wc = helper.workcloud(selected_user, df, max_words=max_words)
                 if wc is not None:
-                    fig, ax = plt.subplots(figsize=(10, 6))
+                    fig, ax = plt.subplots(figsize=(12, 8))
                     ax.imshow(wc)
                     ax.axis("off")
                     st.pyplot(fig)
@@ -380,8 +417,15 @@ if uploaded_file or uploaded_zip:
                     fig = px.bar(most_common_df.head(15), x='Frequency', y='Word',
                                orientation='h',
                                title='Top 15 Common Words',
-                               labels={'Word': 'Words', 'Frequency': 'Frequency'})
-                    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+                               labels={'Word': 'Words', 'Frequency': 'Frequency'},
+                               color='Frequency',
+                               color_continuous_scale='viridis')
+                    fig.update_layout(
+                        yaxis={'categoryorder':'total ascending'},
+                        height=500,
+                        xaxis_title="Frequency",
+                        yaxis_title=""
+                    )
                     st.plotly_chart(fig, use_container_width=True)
             
             progress_bar.progress(95)
@@ -398,14 +442,15 @@ if uploaded_file or uploaded_zip:
                     # Display emojis properly with HTML to ensure they render
                     emoji_display = emoji_df.copy()
                     emoji_display['Emoji with Name'] = emoji_display['Emoji'].apply(
-                        lambda x: f"{x} ({emoji.demojize(x).replace(':', '').replace('_', ' ')})"
+                        lambda x: f"{x}  ({emoji.demojize(x).replace(':', '').replace('_', ' ')})"
                     )
                     display_df = emoji_display[['Emoji with Name', 'Count']].rename(
                         columns={'Emoji with Name': 'Emoji', 'Count': 'Count'}
                     )
                     st.dataframe(
                         display_df,
-                        use_container_width=True
+                        use_container_width=True,
+                        height=400
                     )
             
             with col2:
@@ -417,10 +462,15 @@ if uploaded_file or uploaded_zip:
                     fig = go.Figure(data=[go.Pie(
                         labels=top_emojis['Emoji'],
                         values=top_emojis['Count'],
-                        texttemplate='%{label}',
-                        textposition='inside'
+                        texttemplate='%{label}<br>%{percent}',
+                        textposition='inside',
+                        hole=0.3
                     )])
-                    fig.update_layout(title='Top 8 Emojis Distribution')
+                    fig.update_layout(
+                        title='Top 8 Emojis Distribution',
+                        height=400,
+                        showlegend=True
+                    )
                     st.plotly_chart(fig, use_container_width=True)
             
             progress_bar.progress(100)
@@ -432,18 +482,18 @@ if uploaded_file or uploaded_zip:
             st.markdown("## 📥 Download Results")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📊 Download Analysis Report"):
+                if st.button("📊 Download Analysis Report", use_container_width=True):
                     report = export_analysis(df, selected_user)
                     st.markdown(create_download_link(report, "chat_analysis_report.txt"), unsafe_allow_html=True)
             
             with col2:
-                if st.button("📁 Download Processed Data (CSV)"):
+                if st.button("📁 Download Processed Data (CSV)", use_container_width=True):
                     csv = df.to_csv(index=False)
                     st.markdown(create_download_link(csv, "processed_chat_data.csv"), unsafe_allow_html=True)
 
 elif not st.session_state.analysis_done:
     # Welcome screen
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns([1, 1.5])
     
     with col1:
         st.image("https://img.icons8.com/clouds/400/000000/whatsapp.png", width=300)
@@ -461,29 +511,30 @@ elif not st.session_state.analysis_done:
         - 😊 **Emoji Analysis** - Track emoji usage
         - 📥 **Export Results** - Download reports and processed data
         
+        ### Time Format Support:
+        - ✅ **12-hour format** (e.g., 13/03/22, 8:30 PM)
+        - ✅ **24-hour format** (e.g., 13/03/22, 20:30)
+        - ✅ Both Android and iPhone exports
+        
         ### Getting Started:
         1. Export your WhatsApp chat (without media)
         2. Upload the .txt file or zip multiple chats
         3. Select a user or view overall analysis
         4. Click "Analyze" to see insights!
-        
-        ### How to Export:
-        - **Android**: Chat menu → More → Export Chat → Without Media
-        - **iPhone**: Contact/Group name → Export Chat → Without Media
         """)
         
         with st.expander("📖 Detailed Instructions"):
             st.markdown("""
             ### Step-by-Step Guide
             
-            **Android:**
+            **Android (12-hour format):**
             1. Open the WhatsApp chat you want to analyze
             2. Tap on the three dots in the top right
             3. Select "More" → "Export Chat"
             4. Choose "Without Media"
             5. Save the .txt file to your device
             
-            **iPhone:**
+            **iPhone (24-hour format):**
             1. Open the WhatsApp chat
             2. Tap on the contact name or group subject
             3. Scroll down and tap "Export Chat"
@@ -494,4 +545,5 @@ elif not st.session_state.analysis_done:
             - For group chats, all participants will be analyzed
             - You can upload multiple chats in a zip file for combined analysis
             - Media files are not included to keep the analysis lightweight
+            - Both 12-hour and 24-hour time formats are automatically detected
             """)
