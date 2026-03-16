@@ -18,8 +18,9 @@ from io import BytesIO
 import emoji
 import requests
 import validators
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import re
+import time
 
 # Page configuration
 st.set_page_config(
@@ -89,6 +90,25 @@ st.markdown("""
         border-radius: 5px;
         margin: 1rem 0;
     }
+    .info-box {
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .url-history-item {
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        cursor: pointer;
+        border: 1px solid #dee2e6;
+    }
+    .url-history-item:hover {
+        background-color: #e2e6ea;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -101,6 +121,10 @@ if 'selected_user' not in st.session_state:
     st.session_state.selected_user = "Overall"
 if 'url_processed' not in st.session_state:
     st.session_state.url_processed = False
+if 'url_history' not in st.session_state:
+    st.session_state.url_history = []
+if 'current_url' not in st.session_state:
+    st.session_state.current_url = ""
 
 # Sidebar
 with st.sidebar:
@@ -125,23 +149,46 @@ with st.sidebar:
             type="txt",
             help="Export chat without media from WhatsApp (supports both 12-hour and 24-hour formats)"
         )
+        
     elif input_method == "🔗 URL Link":
-        st.markdown("### Enter URL")
+        st.markdown("### 🔗 Enter Chat URL")
         st.markdown("Paste a direct link to a WhatsApp chat text file")
+        
+        # URL input with example
         url_input = st.text_input(
             "URL:",
-            placeholder="https://example.com/chat.txt",
+            placeholder="https://example.com/chat.txt or https://drive.google.com/...",
+            value=st.session_state.current_url,
             help="Enter the direct URL to a WhatsApp chat export file"
         )
         
-        # URL validation info
-        st.markdown("""
-        **Supported URL types:**
-        - Direct links to .txt files
-        - GitHub raw links
-        - Google Drive links (must be publicly shared)
-        - Any publicly accessible text file
-        """)
+        # URL type selector
+        url_type = st.radio(
+            "URL Type:",
+            ["Direct Link", "Google Drive", "GitHub", "Pastebin", "Other"],
+            help="Select the type of URL to handle special cases"
+        )
+        
+        # Advanced URL options
+        with st.expander("🔧 Advanced URL Options"):
+            custom_filename = st.text_input(
+                "Custom filename (optional):",
+                placeholder="chat.txt",
+                help="Specify a filename for the downloaded content"
+            )
+            timeout = st.number_input("Timeout (seconds)", min_value=5, max_value=120, value=30)
+            verify_ssl = st.checkbox("Verify SSL", value=True, help="Disable for self-signed certificates")
+        
+        # URL history
+        if st.session_state.url_history:
+            st.markdown("### 📜 Recent URLs")
+            for i, url in enumerate(st.session_state.url_history[-5:]):
+                if st.button(f"🔗 {url[:50]}...", key=f"history_{i}"):
+                    st.session_state.current_url = url
+                    st.rerun()
+        
+        # Load button
+        load_url_btn = st.button("📥 Load from URL", use_container_width=True, type="primary")
         
     else:  # Zip File
         uploaded_zip = st.file_uploader(
@@ -151,59 +198,166 @@ with st.sidebar:
         )
     
     # Advanced options
-    with st.expander("⚙️ Advanced Options"):
+    with st.expander("⚙️ Analysis Options"):
         max_words = st.slider("Max words in wordcloud", 50, 300, 150)
-        show_media = st.checkbox("Include media messages in wordcloud", value=False)
-        timeout = st.number_input("URL timeout (seconds)", min_value=5, max_value=60, value=30)
+        show_media = st.checkbox("Include media messages in analysis", value=False)
+        min_word_length = st.slider("Minimum word length", 2, 5, 3)
 
-def extract_filename_from_url(url):
-    """Extract filename from URL"""
+# URL Handling Functions
+def extract_filename_from_url(url, custom_name=None):
+    """Extract filename from URL or use custom name"""
+    if custom_name and custom_name.strip():
+        return custom_name.strip()
+    
     parsed = urlparse(url)
     path = parsed.path
     filename = os.path.basename(path)
+    
+    # Handle Google Drive links
+    if 'drive.google.com' in url:
+        if 'file/d/' in url:
+            file_id = url.split('/file/d/')[1].split('/')[0]
+            return f"google_drive_{file_id}.txt"
+        elif 'id=' in url:
+            file_id = parse_qs(parsed.query).get('id', ['unknown'])[0]
+            return f"google_drive_{file_id}.txt"
+    
+    # Handle Pastebin
+    if 'pastebin.com' in url:
+        if 'raw' not in url:
+            paste_id = path.split('/')[-1]
+            return f"pastebin_{paste_id}.txt"
+    
+    # Handle GitHub
+    if 'github.com' in url:
+        if 'blob' in path:
+            # Convert blob to raw
+            path = path.replace('/blob/', '/raw/')
+        return os.path.basename(path) or "github_chat.txt"
+    
     if not filename or '.' not in filename:
         filename = "downloaded_chat.txt"
+    
     return filename
 
-def download_from_url(url, timeout=30):
-    """Download content from URL"""
+def convert_to_direct_link(url, url_type):
+    """Convert various URL types to direct download links"""
+    parsed = urlparse(url)
+    
+    if url_type == "Google Drive" or 'drive.google.com' in url:
+        # Extract file ID from Google Drive URL
+        if '/file/d/' in url:
+            file_id = url.split('/file/d/')[1].split('/')[0]
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+        elif 'id=' in url:
+            file_id = parse_qs(parsed.query).get('id', [None])[0]
+            if file_id:
+                return f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    elif url_type == "GitHub" or 'github.com' in url:
+        # Convert GitHub blob to raw
+        if 'blob' in url:
+            return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+    
+    elif url_type == "Pastebin" or 'pastebin.com' in url:
+        # Convert to raw Pastebin
+        if 'raw' not in url:
+            paste_id = url.split('/')[-1]
+            return f"https://pastebin.com/raw/{paste_id}"
+    
+    return url
+
+def download_from_url(url, timeout=30, verify_ssl=True, url_type="Direct Link"):
+    """Download content from URL with support for various platforms"""
     try:
         # Validate URL
         if not validators.url(url):
             return None, "Invalid URL format"
         
-        # Send request
+        # Convert to direct link if needed
+        direct_url = convert_to_direct_link(url, url_type)
+        
+        # Custom headers to avoid blocking
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/plain, text/html, application/octet-stream, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         }
-        response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        response.raise_for_status()
+        
+        # Show what URL we're trying
+        st.info(f"Attempting to download from: {direct_url}")
+        
+        # Send request with progress
+        with st.spinner("Downloading file..."):
+            response = requests.get(
+                direct_url, 
+                headers=headers, 
+                timeout=timeout, 
+                verify=verify_ssl,
+                allow_redirects=True,
+                stream=True
+            )
+            response.raise_for_status()
         
         # Check content type
-        content_type = response.headers.get('content-type', '')
-        if 'text' not in content_type and 'plain' not in content_type:
-            # Try to decode anyway
-            pass
+        content_type = response.headers.get('content-type', '').lower()
+        content_length = len(response.content)
         
-        # Try to decode content
-        try:
-            content = response.content.decode('utf-8')
-        except UnicodeDecodeError:
-            # Try other encodings
+        st.info(f"Content-Type: {content_type}, Size: {content_length:,} bytes")
+        
+        # Try to decode content with multiple encodings
+        content = None
+        encodings_to_try = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings_to_try:
             try:
-                content = response.content.decode('latin-1')
-            except:
-                return None, "Could not decode file content. Please ensure it's a text file."
+                content = response.content.decode(encoding)
+                st.success(f"Successfully decoded with {encoding}")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if content is None:
+            return None, "Could not decode file content with any common encoding"
+        
+        # Verify it looks like a WhatsApp chat
+        if not is_whatsapp_chat(content):
+            st.warning("The downloaded content doesn't look like a typical WhatsApp chat. Analysis may fail.")
         
         return content, None
+        
     except requests.exceptions.Timeout:
         return None, f"Request timed out after {timeout} seconds"
+    except requests.exceptions.SSLError:
+        return None, "SSL Error. Try disabling SSL verification in Advanced Options."
     except requests.exceptions.ConnectionError:
         return None, "Connection error. Please check the URL and try again."
     except requests.exceptions.HTTPError as e:
-        return None, f"HTTP error: {e.response.status_code} - {e.response.reason}"
+        if e.response.status_code == 404:
+            return None, "File not found (404). Please check the URL."
+        elif e.response.status_code == 403:
+            return None, "Access forbidden (403). The file might be private."
+        else:
+            return None, f"HTTP error: {e.response.status_code}"
     except Exception as e:
         return None, f"Error downloading file: {str(e)}"
+
+def is_whatsapp_chat(content):
+    """Basic check if content looks like WhatsApp chat"""
+    # Check for common WhatsApp patterns
+    patterns = [
+        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}',  # Date/time pattern
+        r'<Media omitted>',  # Media omitted
+        r' - [^:]+:',  # User pattern
+    ]
+    
+    for pattern in patterns:
+        if re.search(pattern, content[:1000]):  # Check first 1000 chars
+            return True
+    return False
 
 def process_chat_file(file_content, filename="uploaded_chat.txt"):
     """Process a single chat file"""
@@ -279,30 +433,55 @@ df = None
 errors = None
 source_info = ""
 
-if input_method == "🔗 URL Link" and url_input:
-    if st.sidebar.button("📥 Load from URL", use_container_width=True):
-        with st.spinner("🔄 Downloading from URL..."):
-            content, error = download_from_url(url_input, timeout=timeout)
+if input_method == "🔗 URL Link" and url_input and load_url_btn:
+    with st.spinner("🔄 Processing URL..."):
+        # Add to history
+        if url_input not in st.session_state.url_history:
+            st.session_state.url_history.append(url_input)
+        
+        # Download from URL
+        content, error = download_from_url(
+            url_input, 
+            timeout=timeout, 
+            verify_ssl=verify_ssl,
+            url_type=url_type
+        )
+        
+        if error:
+            st.markdown(f'<div class="error-box">❌ {error}</div>', unsafe_allow_html=True)
+        else:
+            # Show preview
+            with st.expander("📄 Preview downloaded content", expanded=True):
+                lines = content.split('\n')
+                preview_lines = lines[:15]
+                preview = '\n'.join(preview_lines)
+                st.text(f"First 15 lines of {len(lines)} total lines:")
+                st.code(preview, language='text')
+                
+                # Show sample of chat format
+                if len(lines) > 0:
+                    st.markdown("**Sample line:**")
+                    st.info(lines[0] if lines else "Empty file")
+            
+            # Process the content
+            filename = extract_filename_from_url(url_input, custom_filename)
+            df, error = process_chat_file(content, filename)
             
             if error:
                 st.markdown(f'<div class="error-box">❌ {error}</div>', unsafe_allow_html=True)
             else:
-                # Preview the content
-                with st.expander("📄 Preview downloaded content"):
-                    preview_lines = content.split('\n')[:10]
-                    preview = '\n'.join(preview_lines)
-                    st.text(preview + ("\n..." if len(content.split('\n')) > 10 else ""))
+                st.markdown(f'<div class="success-box">✅ Successfully loaded chat from: {filename}</div>', unsafe_allow_html=True)
+                source_info = f"URL: {url_input}"
+                st.session_state.url_processed = True
                 
-                # Process the content
-                filename = extract_filename_from_url(url_input)
-                df, error = process_chat_file(content, filename)
-                
-                if error:
-                    st.markdown(f'<div class="error-box">❌ {error}</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="success-box">✅ Successfully loaded chat from URL: {filename}</div>', unsafe_allow_html=True)
-                    source_info = f"Source: {url_input}"
-                    st.session_state.url_processed = True
+                # Show file info
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("File Size", f"{len(content)/1024:.1f} KB")
+                with col2:
+                    st.metric("Lines", len(content.split('\n')))
+                with col3:
+                    st.metric("Format", "WhatsApp Chat")
 
 elif uploaded_file:
     with st.spinner("🔄 Processing chat file..."):
@@ -332,14 +511,15 @@ if df is not None and not df.empty:
     
     # Show source info
     if source_info:
-        st.info(f"📁 {source_info}")
+        st.markdown(f'<div class="info-box">📁 {source_info}</div>', unsafe_allow_html=True)
     
     # Display basic info about the chat
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Messages", f"{len(df):,}")
     with col2:
-        st.metric("Date Range", f"{df['only_date'].min()} to {df['only_date'].max()}")
+        date_range = f"{df['only_date'].min()} to {df['only_date'].max()}"
+        st.metric("Date Range", date_range)
     with col3:
         unique_users = len(df[df['user'] != 'group_notification']['user'].unique())
         st.metric("Active Users", unique_users)
@@ -480,13 +660,6 @@ if df is not None and not df.empty:
                     st.info(f"📊 **Peak activity hour**: {int(peak_hour):02d}:00 ({'AM' if peak_hour < 12 else 'PM'})")
                 with col2:
                     st.info(f"📈 **Messages at peak hour**: {int(peak_count):,}")
-                
-                # Show top 3 active hours
-                st.write("**Top 3 Most Active Hours:**")
-                top_hours = hourly_activity.nlargest(3, 'message_count')[['hour', 'message_count']]
-                for idx, row in top_hours.iterrows():
-                    hour = int(row['hour'])
-                    st.write(f"• {hour:02d}:00 - {hour:02d}:59 ({'AM' if hour < 12 else 'PM'}): {int(row['message_count']):,} messages")
         
         progress_bar.progress(50)
         
@@ -575,7 +748,6 @@ if df is not None and not df.empty:
         with col1:
             if emoji_df is not None and not emoji_df.empty:
                 st.subheader("Emoji Usage Stats")
-                # Display emojis properly with HTML to ensure they render
                 emoji_display = emoji_df.copy()
                 emoji_display['Emoji with Name'] = emoji_display['Emoji'].apply(
                     lambda x: f"{x}  ({emoji.demojize(x).replace(':', '').replace('_', ' ')})"
@@ -594,7 +766,6 @@ if df is not None and not df.empty:
                 st.subheader("Top Emojis")
                 top_emojis = emoji_df.head(8)
                 
-                # Create pie chart with emoji labels
                 fig = go.Figure(data=[go.Pie(
                     labels=top_emojis['Emoji'],
                     values=top_emojis['Count'],
@@ -645,13 +816,16 @@ elif not st.session_state.analysis_done:
         - 👥 **User Analysis** - Compare participant activity
         - ☁️ **Word Clouds** - See frequently used words
         - 😊 **Emoji Analysis** - Track emoji usage
-        - 🔗 **URL Support** - Analyze chats directly from URLs
+        - 🔗 **Smart URL Support** - Paste any chat link (Google Drive, GitHub, Pastebin, etc.)
         - 📥 **Export Results** - Download reports and processed data
         
-        ### Input Methods:
-        - ✅ **Upload File** - Upload local .txt file
-        - ✅ **URL Link** - Paste direct link to chat file
-        - ✅ **Zip File** - Upload multiple chats in zip
+        ### URL Features:
+        - ✅ **Google Drive** - Automatically converts to direct download
+        - ✅ **GitHub** - Converts blob to raw content
+        - ✅ **Pastebin** - Fetches raw paste content
+        - ✅ **Direct Links** - Works with any public .txt file
+        - ✅ **URL History** - Remembers recent URLs
+        - ✅ **Preview** - See content before processing
         
         ### Time Format Support:
         - ✅ **12-hour format** (e.g., 13/03/22, 8:30 PM)
@@ -659,35 +833,8 @@ elif not st.session_state.analysis_done:
         
         ### Getting Started:
         1. Export your WhatsApp chat (without media)
-        2. Choose input method from sidebar
-        3. Upload file, paste URL, or upload zip
-        4. Select user and click "Analyze"
+        2. Upload to Google Drive, GitHub, or any file host
+        3. Get a shareable link
+        4. Paste the URL and click "Load from URL"
+        5. Click "Analyze" to see insights!
         """)
-        
-        with st.expander("📖 Detailed Instructions"):
-            st.markdown("""
-            ### Step-by-Step Guide
-            
-            **Method 1: Upload File**
-            1. Export chat from WhatsApp
-            2. Click "Browse files" and select the .txt file
-            3. Click "Analyze" to start
-            
-            **Method 2: URL Link**
-            1. Upload your chat file to a cloud service
-            2. Get a direct download link
-            3. Paste the URL and click "Load from URL"
-            4. Click "Analyze" to start
-            
-            **Method 3: Zip File**
-            1. Collect multiple chat exports
-            2. Compress them into a zip file
-            3. Upload the zip file
-            4. All chats will be combined for analysis
-            
-            **Supported URL types:**
-            - Direct file links
-            - GitHub raw content
-            - Google Drive (must be publicly shared)
-            - Any publicly accessible text file
-            """)
