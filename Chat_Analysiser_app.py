@@ -99,17 +99,6 @@ st.markdown("""
         border-radius: 5px;
         margin: 1rem 0;
     }
-    .url-history-item {
-        padding: 0.5rem;
-        margin: 0.25rem 0;
-        background-color: #f8f9fa;
-        border-radius: 5px;
-        cursor: pointer;
-        border: 1px solid #dee2e6;
-    }
-    .url-history-item:hover {
-        background-color: #e2e6ea;
-    }
     div[data-testid="stMetricValue"] {
         font-size: 2rem;
         color: #075e54;
@@ -134,6 +123,8 @@ if 'url_history' not in st.session_state:
     st.session_state.url_history = []
 if 'current_url' not in st.session_state:
     st.session_state.current_url = ""
+if 'show_analysis' not in st.session_state:
+    st.session_state.show_analysis = False
 
 # Sidebar
 with st.sidebar:
@@ -145,7 +136,8 @@ with st.sidebar:
     input_method = st.radio(
         "Choose input method:",
         ["📄 Upload File", "🔗 URL Link", "📦 Zip File"],
-        help="Select how you want to provide the chat data"
+        help="Select how you want to provide the chat data",
+        key="input_method"
     )
     
     uploaded_file = None
@@ -156,7 +148,8 @@ with st.sidebar:
         uploaded_file = st.file_uploader(
             "Upload WhatsApp chat (.txt)", 
             type="txt",
-            help="Export chat without media from WhatsApp (supports both 12-hour and 24-hour formats)"
+            help="Export chat without media from WhatsApp (supports both 12-hour and 24-hour formats)",
+            key="file_uploader"
         )
         
     elif input_method == "🔗 URL Link":
@@ -168,14 +161,16 @@ with st.sidebar:
             "URL:",
             placeholder="https://example.com/chat.txt or https://drive.google.com/...",
             value=st.session_state.current_url,
-            help="Enter the direct URL to a WhatsApp chat export file"
+            help="Enter the direct URL to a WhatsApp chat export file",
+            key="url_input"
         )
         
         # URL type selector
         url_type = st.radio(
             "URL Type:",
             ["Auto Detect", "Direct Link", "Google Drive", "GitHub", "Pastebin"],
-            help="Select the type of URL for better handling"
+            help="Select the type of URL for better handling",
+            key="url_type"
         )
         
         # Advanced URL options
@@ -183,10 +178,11 @@ with st.sidebar:
             custom_filename = st.text_input(
                 "Custom filename (optional):",
                 placeholder="chat.txt",
-                help="Specify a filename for the downloaded content"
+                help="Specify a filename for the downloaded content",
+                key="custom_filename"
             )
-            timeout = st.number_input("Timeout (seconds)", min_value=5, max_value=120, value=30)
-            verify_ssl = st.checkbox("Verify SSL", value=True, help="Disable for self-signed certificates")
+            timeout = st.number_input("Timeout (seconds)", min_value=5, max_value=120, value=30, key="timeout")
+            verify_ssl = st.checkbox("Verify SSL", value=True, help="Disable for self-signed certificates", key="verify_ssl")
         
         # URL history
         if st.session_state.url_history:
@@ -197,20 +193,21 @@ with st.sidebar:
                     st.rerun()
         
         # Load button
-        load_url_btn = st.button("📥 Load from URL", use_container_width=True, type="primary")
+        load_url_btn = st.button("📥 Load from URL", use_container_width=True, type="primary", key="load_url")
         
     else:  # Zip File
         uploaded_zip = st.file_uploader(
             "Upload Zip file", 
             type="zip",
-            help="Zip file containing multiple WhatsApp chat exports"
+            help="Zip file containing multiple WhatsApp chat exports",
+            key="zip_uploader"
         )
     
     # Advanced options
     with st.expander("⚙️ Analysis Options"):
-        max_words = st.slider("Max words in wordcloud", 50, 300, 150)
-        show_media = st.checkbox("Include media messages in analysis", value=False)
-        min_word_length = st.slider("Minimum word length", 2, 5, 3)
+        max_words = st.slider("Max words in wordcloud", 50, 300, 150, key="max_words")
+        show_media = st.checkbox("Include media messages in analysis", value=False, key="show_media")
+        min_word_length = st.slider("Minimum word length", 2, 5, 3, key="min_word_length")
 
 # URL Handling Functions
 def extract_filename_from_url(url, custom_name=None):
@@ -393,7 +390,7 @@ def process_zip_file(zip_file):
 def create_download_link(val, filename):
     """Create a download link for data"""
     b64 = base64.b64encode(val.encode()).decode()
-    return f'<a href="data:file/txt;base64,{b64}" download="{filename}">📥 Download {filename}</a>'
+    return f'<a href="data:file/txt;base64,{b64}" download="{filename}" target="_blank">📥 Download {filename}</a>'
 
 def export_analysis(df, selected_user):
     """Export analysis results to text"""
@@ -421,7 +418,19 @@ df = None
 errors = None
 source_info = ""
 
-if input_method == "🔗 URL Link" and url_input and 'load_url_btn' in locals() and load_url_btn:
+# Handle file upload
+if input_method == "📄 Upload File" and uploaded_file is not None:
+    with st.spinner("🔄 Processing chat file..."):
+        content = uploaded_file.getvalue().decode("utf-8")
+        df, errors = process_chat_file(content, uploaded_file.name)
+        if df is not None:
+            source_info = f"File: {uploaded_file.name}"
+            st.session_state.df = df
+            st.session_state.analysis_done = True
+            st.markdown(f'<div class="success-box">✅ Successfully loaded: {uploaded_file.name}</div>', unsafe_allow_html=True)
+
+# Handle URL loading
+elif input_method == "🔗 URL Link" and url_input and 'load_url_btn' in locals() and load_url_btn:
     with st.spinner("🔄 Processing URL..."):
         # Add to history
         if url_input not in st.session_state.url_history:
@@ -430,9 +439,9 @@ if input_method == "🔗 URL Link" and url_input and 'load_url_btn' in locals() 
         # Download from URL
         content, error = download_from_url(
             url_input, 
-            timeout=timeout, 
-            verify_ssl=verify_ssl,
-            url_type=url_type
+            timeout=timeout if 'timeout' in locals() else 30, 
+            verify_ssl=verify_ssl if 'verify_ssl' in locals() else True,
+            url_type=url_type if 'url_type' in locals() else "Auto Detect"
         )
         
         if error:
@@ -447,7 +456,7 @@ if input_method == "🔗 URL Link" and url_input and 'load_url_btn' in locals() 
                 st.code(preview, language='text')
             
             # Process the content
-            filename = extract_filename_from_url(url_input, custom_filename)
+            filename = extract_filename_from_url(url_input, custom_filename if 'custom_filename' in locals() else None)
             df, error = process_chat_file(content, filename)
             
             if error:
@@ -455,21 +464,18 @@ if input_method == "🔗 URL Link" and url_input and 'load_url_btn' in locals() 
             else:
                 st.markdown(f'<div class="success-box">✅ Successfully loaded chat from: {filename}</div>', unsafe_allow_html=True)
                 source_info = f"URL: {url_input}"
+                st.session_state.df = df
+                st.session_state.analysis_done = True
                 st.session_state.url_processed = True
 
-elif uploaded_file:
-    with st.spinner("🔄 Processing chat file..."):
-        content = uploaded_file.getvalue().decode("utf-8")
-        df, errors = process_chat_file(content, uploaded_file.name)
-        if df is not None:
-            source_info = f"File: {uploaded_file.name}"
-            st.markdown(f'<div class="success-box">✅ Successfully loaded: {uploaded_file.name}</div>', unsafe_allow_html=True)
-
-elif uploaded_zip:
+# Handle zip file
+elif input_method == "📦 Zip File" and uploaded_zip is not None:
     with st.spinner("🔄 Processing zip file (this may take a moment)..."):
         df, errors = process_zip_file(uploaded_zip)
         if df is not None:
             source_info = f"Zip file: {uploaded_zip.name}"
+            st.session_state.df = df
+            st.session_state.analysis_done = True
             st.markdown(f'<div class="success-box">✅ Successfully loaded zip file with {len(df)} messages</div>', unsafe_allow_html=True)
 
 # Display errors if any
@@ -480,12 +486,12 @@ if errors:
     else:
         st.markdown(f'<div class="error-box">⚠️ {errors}</div>', unsafe_allow_html=True)
 
-# Main analysis section
-if df is not None and not df.empty:
-    st.session_state.df = df
-    st.session_state.analysis_done = True
+# Main analysis section - Always show if data is loaded
+if st.session_state.df is not None and not st.session_state.df.empty:
+    df = st.session_state.df
     
     # Display basic info about the chat
+    st.markdown("## 📊 Chat Overview")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Messages", f"{len(df):,}")
@@ -496,7 +502,7 @@ if df is not None and not df.empty:
         unique_users = len(df[df['user'] != 'group_notification']['user'].unique())
         st.metric("Active Users", unique_users)
     with col4:
-        total_days = (df['only_date'].max() - df['only_date'].min()).days
+        total_days = (pd.to_datetime(df['only_date'].max()) - pd.to_datetime(df['only_date'].min())).days
         st.metric("Total Days", f"{total_days} days")
     
     # Get unique users
@@ -507,20 +513,32 @@ if df is not None and not df.empty:
     users.sort()
     users.insert(0, "Overall")
     
-    # User selection
-    col1, col2 = st.columns([3, 1])
+    # User selection and analyze button
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         selected_user = st.selectbox(
             "👤 Select User for Analysis",
             users,
-            index=0
+            index=0,
+            key="user_selector"
         )
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
-        analyze_btn = st.button("🔍 Analyze", use_container_width=True)
+        analyze_btn = st.button("🔍 Analyze Now", use_container_width=True, type="primary", key="analyze_btn")
+    with col3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("📥 Export Raw Data", use_container_width=True, key="export_btn"):
+            csv = df.to_csv(index=False)
+            st.markdown(create_download_link(csv, "raw_chat_data.csv"), unsafe_allow_html=True)
     
+    # Perform analysis when button is clicked
     if analyze_btn:
         st.session_state.selected_user = selected_user
+        st.session_state.show_analysis = True
+    
+    # Show analysis results
+    if st.session_state.show_analysis:
+        selected_user = st.session_state.selected_user
         
         # Progress bar
         progress_bar = st.progress(0)
@@ -532,7 +550,7 @@ if df is not None and not df.empty:
         num, words, media, links = helper.fetch_stats(selected_user, df)
         
         # Display stats in beautiful cards
-        st.markdown("## 📊 Overview Statistics")
+        st.markdown("## 📈 Statistics")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -570,7 +588,7 @@ if df is not None and not df.empty:
         progress_bar.progress(30)
         
         # Timeline Analysis
-        st.markdown("## 📈 Timeline Analysis")
+        st.markdown("## 📅 Timeline Analysis")
         tab1, tab2, tab3 = st.tabs(["📅 Monthly Timeline", "📆 Daily Timeline", "⏰ Hourly Activity"])
         
         with tab1:
@@ -798,5 +816,5 @@ elif not st.session_state.analysis_done:
         1. Export your WhatsApp chat (without media)
         2. Choose input method from sidebar
         3. Upload file, paste URL, or upload zip
-        4. Select user and click "Analyze"
+        4. Click "Analyze Now" to see insights!
         """)
