@@ -41,13 +41,13 @@ def preprocess(data):
     # Try to parse dates with different formats
     date_parsed = False
     date_formats = [
-        ('%d/%m/%y, %H:%M - ', False),      # 24-hour with 2-digit year
-        ('%d/%m/%Y, %H:%M - ', False),      # 24-hour with 4-digit year
-        ('%d/%m/%y, %I:%M %p - ', True),    # 12-hour with 2-digit year
-        ('%d/%m/%Y, %I:%M %p - ', True),    # 12-hour with 4-digit year
+        '%d/%m/%y, %H:%M - ',      # 24-hour with 2-digit year
+        '%d/%m/%Y, %H:%M - ',      # 24-hour with 4-digit year
+        '%d/%m/%y, %I:%M %p - ',   # 12-hour with 2-digit year
+        '%d/%m/%Y, %I:%M %p - ',   # 12-hour with 4-digit year
     ]
     
-    for fmt, has_ampm in date_formats:
+    for fmt in date_formats:
         try:
             df["date"] = pd.to_datetime(
                 df["date"],
