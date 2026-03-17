@@ -27,7 +27,6 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    /* Main header */
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 2rem;
@@ -47,8 +46,6 @@ st.markdown("""
         opacity: 0.9;
         margin: 0.5rem 0 0 0;
     }
-    
-    /* Stat cards */
     .stat-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 15px;
@@ -73,8 +70,6 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 1px;
     }
-    
-    /* Feature cards */
     .feature-card {
         background: white;
         border-radius: 15px;
@@ -87,8 +82,6 @@ st.markdown("""
     .feature-card:hover {
         transform: translateX(10px);
     }
-    
-    /* Buttons */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -105,8 +98,6 @@ st.markdown("""
         transform: translateY(-3px);
         box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
     }
-    
-    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 2rem;
         background-color: #f8f9fa;
@@ -118,8 +109,6 @@ st.markdown("""
         padding: 0.5rem 2rem;
         font-weight: 600;
     }
-    
-    /* Metrics */
     .metric-container {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         border-radius: 15px;
@@ -138,8 +127,6 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 1px;
     }
-    
-    /* Info boxes */
     .info-box {
         background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
         border-radius: 15px;
@@ -147,8 +134,6 @@ st.markdown("""
         border-left: 5px solid #2196f3;
         margin: 1rem 0;
     }
-    
-    /* Progress bar */
     .stProgress > div > div > div > div {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
@@ -382,8 +367,7 @@ if uploaded_file:
                                      labels={'time': 'Month', 'message': 'Messages'})
                         fig.update_traces(line_color='#667eea', line_width=3)
                         fig.update_layout(showlegend=False, height=400)
-                        # FIXED: use_container_width -> width='stretch'
-                        st.plotly_chart(fig, use_container_width=True)  # Keep as is for plotly
+                        st.plotly_chart(fig, use_container_width=True)
                 
                 with tab2:
                     daily = helper.daily_timeline(selected_user, df)
@@ -452,7 +436,7 @@ if uploaded_file:
                         if not user_df.empty:
                             st.dataframe(
                                 user_df.style.highlight_max(color='#90EE90'),
-                                use_container_width=True,  # FIXED: This is for dataframe, keep as is
+                                use_container_width=True,
                                 height=400
                             )
                 
