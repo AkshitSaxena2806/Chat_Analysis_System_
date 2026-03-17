@@ -28,7 +28,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
         padding: 2rem;
         border-radius: 15px;
         color: white;
@@ -47,12 +47,12 @@ st.markdown("""
         margin: 0.5rem 0 0 0;
     }
     .stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
         border-radius: 15px;
         padding: 1.8rem;
         color: white;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 10px 30px rgba(37, 211, 102, 0.3);
         transition: transform 0.3s ease;
         height: 100%;
     }
@@ -75,7 +75,7 @@ st.markdown("""
         border-radius: 15px;
         padding: 1.5rem;
         box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        border-left: 5px solid #667eea;
+        border-left: 5px solid #25D366;
         margin-bottom: 1rem;
         transition: transform 0.3s ease;
     }
@@ -83,7 +83,7 @@ st.markdown("""
         transform: translateX(10px);
     }
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
         color: white;
         font-weight: bold;
         border: none;
@@ -92,11 +92,11 @@ st.markdown("""
         font-size: 1.1rem;
         transition: all 0.3s ease;
         width: 100%;
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 5px 15px rgba(37, 211, 102, 0.4);
     }
     .stButton > button:hover {
         transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+        box-shadow: 0 8px 25px rgba(37, 211, 102, 0.5);
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 2rem;
@@ -119,7 +119,7 @@ st.markdown("""
     .metric-value {
         font-size: 2.5rem;
         font-weight: bold;
-        color: #667eea;
+        color: #25D366;
     }
     .metric-label {
         font-size: 1rem;
@@ -135,7 +135,7 @@ st.markdown("""
         margin: 1rem 0;
     }
     .stProgress > div > div > div > div {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -168,21 +168,17 @@ with st.sidebar:
     st.markdown("---")
     
     # Instructions
-    with st.expander("📖 How to Export", expanded=False):
+    with st.expander("📖 Supported Formats", expanded=True):
         st.markdown("""
-        **Android:**
-        1. Open chat → Three dots → More → Export Chat
-        2. Choose **Without Media**
-        3. Save the .txt file
+        **Format 1 (with AM/PM):**
+        `05/09/25, 10:21 am - Message`
         
-        **iPhone:**
-        1. Open chat → Contact name → Export Chat
-        2. Choose **Without Media**
-        3. Save the .txt file
+        **Format 2 (24-hour):**
+        `14/07/25, 12:30 - Message`
         
-        **Supported Formats:**
-        - 24-hour: 14/07/25, 12:30 - Message
-        - 12-hour: 14/07/25, 12:30 PM - Message
+        **How to Export:**
+        - Android: Chat menu → More → Export Chat → Without Media
+        - iPhone: Contact/Group name → Export Chat → Without Media
         """)
 
 # Main header
@@ -233,7 +229,7 @@ if uploaded_file:
                 </div>
                 """, unsafe_allow_html=True)
             with col2:
-                unique_users = len([u for u in df['user'].unique() if u != 'System'])
+                unique_users = len([u for u in df['user'].unique() if u not in ['System', 'group_notification']])
                 st.markdown(f"""
                 <div class="metric-container">
                     <div class="metric-value">{unique_users}</div>
@@ -254,7 +250,7 @@ if uploaded_file:
             col1, col2 = st.columns([3, 1])
             
             with col1:
-                users = ['Overall'] + [u for u in sorted(df['user'].unique()) if u != 'System']
+                users = ['Overall'] + [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']]
                 selected_user = st.selectbox(
                     "👤 Select User to Analyze",
                     users,
@@ -365,7 +361,7 @@ if uploaded_file:
                         fig = px.line(timeline, x='time', y='message',
                                      title='Monthly Message Activity',
                                      labels={'time': 'Month', 'message': 'Messages'})
-                        fig.update_traces(line_color='#667eea', line_width=3)
+                        fig.update_traces(line_color='#25D366', line_width=3)
                         fig.update_layout(showlegend=False, height=400)
                         st.plotly_chart(fig, use_container_width=True)
                 
@@ -375,21 +371,20 @@ if uploaded_file:
                         fig = px.bar(daily, x='only_date', y='message',
                                     title='Daily Message Activity',
                                     labels={'only_date': 'Date', 'message': 'Messages'})
-                        fig.update_traces(marker_color='#667eea')
+                        fig.update_traces(marker_color='#25D366')
                         fig.update_layout(height=400)
                         st.plotly_chart(fig, use_container_width=True)
                 
                 with tab3:
                     if 'hour' in df.columns:
-                        hourly = df.groupby('hour').count()['message'].reset_index()
+                        hourly = df.groupby('hour').size().reset_index(name='count')
                         all_hours = pd.DataFrame({'hour': range(24)})
                         hourly = pd.merge(all_hours, hourly, on='hour', how='left').fillna(0)
-                        hourly.columns = ['hour', 'count']
                         
                         fig = px.bar(hourly, x='hour', y='count',
-                                    title='Hourly Activity Pattern',
+                                    title='Hourly Activity Pattern (24-Hour Format)',
                                     labels={'hour': 'Hour of Day', 'count': 'Messages'})
-                        fig.update_traces(marker_color='#667eea')
+                        fig.update_traces(marker_color='#25D366')
                         fig.update_layout(height=400)
                         st.plotly_chart(fig, use_container_width=True)
                         
@@ -415,7 +410,7 @@ if uploaded_file:
                 else:
                     st.info("Not enough data for heatmap")
                 
-                # User Analysis (for Overall view)
+                # User Activity Analysis (for Overall view)
                 if selected_user == 'Overall':
                     progress_bar.progress(70)
                     status_text.text("👥 Analyzing user activity...")
@@ -560,7 +555,7 @@ else:
     with col2:
         st.markdown("""
         <div style="padding: 2rem;">
-            <h2 style="color: #667eea;">🚀 Get Started</h2>
+            <h2 style="color: #25D366;">🚀 Get Started</h2>
             <p style="font-size: 1.2rem; line-height: 1.6;">
                 Upload your WhatsApp chat export to unlock powerful insights:
             </p>
@@ -574,7 +569,9 @@ else:
             </ul>
             <div class="info-box">
                 <strong>💡 Tip:</strong> Export your chat without media for best results!<br>
-                <strong>📌 Supported:</strong> 24-hour (14/07/25, 12:30 -) and 12-hour formats
+                <strong>📌 Supports both:</strong><br>
+                • 05/09/25, 10:21 am - Message<br>
+                • 14/07/25, 12:30 - Message
             </div>
         </div>
         """, unsafe_allow_html=True)
