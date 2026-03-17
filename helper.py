@@ -8,14 +8,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
-# Try to set a font that supports emojis
-try:
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = ['Noto Color Emoji', 'DejaVu Sans', 'Apple Color Emoji', 'Segoe UI Emoji']
-except:
-    pass
-
+# Initialize URL extractor
 extractor = URLExtract()
+
+# Common stop words (including Hindi/English)
+STOP_WORDS = {
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+    'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during',
+    'before', 'after', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall',
+    'should', 'may', 'might', 'must', 'can', 'could', 'i', 'you', 'he',
+    'she', 'it', 'we', 'they', 'them', 'their', 'your', 'my', 'his',
+    'her', 'its', 'this', 'that', 'these', 'those', 'ka', 'ki', 'ke', 
+    'ko', 'se', 'mein', 'par', 'aur', 'hai', 'hain', 'tha', 'the', 'thi',
+    'raha', 'rahe', 'rahi', 'kar', 'karke', 'karna', 'hoga', 'hoge',
+    'hogi', 'sakta', 'sakte', 'sakti', 'chahiye', 'apna', 'tum', 'aap',
+    'main', 'hum', 'yeh', 'woh', 'kya', 'kyun', 'kaise', 'kahan', 'kab',
+    'kitna', 'kitne', 'itna', 'utna', 'jab', 'tab', 'jahan', 'tahan',
+    'jaisa', 'aisa', 'waisa', 'maam', 'ma\'am', 'sir', 'miss', 'mrs', 'mr',
+    'hi', 'hello', 'hey', 'ok', 'okay', 'thanks', 'thank', 'please'
+}
 
 def fetch_stats(selected_user, df):
     """Fetch basic statistics"""
@@ -26,13 +38,14 @@ def fetch_stats(selected_user, df):
     
     words = []
     for message in df['message']:
-        words.extend([word for word in message.split() if word.strip()])
+        # Split by spaces and filter out empty strings
+        words.extend([word for word in str(message).split() if word.strip()])
     
-    num_media_messages = df[df['message'].str.contains('<Media omitted>', na=False)].shape[0]
+    num_media_messages = df[df['message'].str.contains('<Media omitted>', na=False, regex=False)].shape[0]
     
     links = []
     for message in df['message']:
-        links.extend(extractor.find_urls(message))
+        links.extend(extractor.find_urls(str(message)))
     
     return num_messages, len(words), num_media_messages, len(links)
 
@@ -40,7 +53,7 @@ def most_busy_users(df):
     """Get most active users"""
     user_counts = df['user'].value_counts()
     # Filter out system messages
-    user_counts = user_counts[user_counts.index != 'System']
+    user_counts = user_counts[~user_counts.index.isin(['System', 'group_notification'])]
     
     x = user_counts.head(10)
     new_df = round((user_counts / df.shape[0]) * 100, 2).reset_index()
@@ -49,42 +62,31 @@ def most_busy_users(df):
 
 def workcloud(selected_user, df, max_words=150):
     """Generate word cloud"""
-    # Stop words
-    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
-                 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during',
-                 'before', 'after', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-                 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall',
-                 'should', 'may', 'might', 'must', 'can', 'could', 'i', 'you', 'he',
-                 'she', 'it', 'we', 'they', 'them', 'their', 'your', 'my', 'his',
-                 'her', 'its', 'this', 'that', 'these', 'those', 'ka', 'ki', 'ke', 
-                 'ko', 'se', 'mein', 'par', 'aur', 'hai', 'hain', 'tha', 'the', 'thi',
-                 'raha', 'rahe', 'rahi', 'kar', 'karke', 'karna', 'hoga', 'hoge',
-                 'hogi', 'sakta', 'sakte', 'sakti', 'chahiye', 'apna', 'tum', 'aap',
-                 'main', 'hum', 'yeh', 'woh', 'kya', 'kyun', 'kaise', 'kahan', 'kab',
-                 'kitna', 'kitne', 'itna', 'utna', 'jab', 'tab', 'jahan', 'tahan',
-                 'jaisa', 'aisa', 'waisa', 'maam', 'ma\'am', 'sir', 'miss', 'mrs', 'mr'}
-    
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
     # Filter out system messages and media
-    temp = df[~df['user'].str.contains('System', na=False)]
-    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False)]
+    temp = df[~df['user'].str.contains('System|group_notification', na=False, regex=True)]
+    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False, regex=False)]
     
     if len(temp) == 0:
         return None
     
     # Clean text
     def clean_text(text):
+        # Convert to string and lowercase
+        text = str(text).lower()
+        # Remove URLs
+        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
         # Remove emojis
         text = ''.join([c for c in text if c not in emoji.EMOJI_DATA])
         # Remove special characters and digits
         text = re.sub(r'[^\w\s]', ' ', text)
         text = re.sub(r'\d+', '', text)
-        # Convert to lowercase
-        words = text.lower().split()
+        # Split into words
+        words = text.split()
         # Filter words
-        words = [word for word in words if word not in stop_words and len(word) > 2]
+        words = [word for word in words if word not in STOP_WORDS and len(word) > 2]
         return ' '.join(words)
     
     temp['clean_message'] = temp['message'].apply(clean_text)
@@ -106,28 +108,27 @@ def workcloud(selected_user, df, max_words=150):
 
 def most_common_words(selected_user, df):
     """Get most common words"""
-    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-                 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'ka',
-                 'ki', 'ke', 'ko', 'se', 'mein', 'par', 'aur', 'hai', 'hain', 'tha',
-                 'the', 'thi', 'raha', 'rahe', 'rahi', 'kar', 'karke', 'karna'}
-    
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
-    temp = df[~df['user'].str.contains('System', na=False)]
-    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False)]
+    temp = df[~df['user'].str.contains('System|group_notification', na=False, regex=True)]
+    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False, regex=False)]
     
     words = []
     for message in temp['message']:
+        # Convert to string and lowercase
+        text = str(message).lower()
+        # Remove URLs
+        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
         # Remove emojis
-        text = ''.join([c for c in message if c not in emoji.EMOJI_DATA])
+        text = ''.join([c for c in text if c not in emoji.EMOJI_DATA])
         # Remove special characters
         text = re.sub(r'[^\w\s]', ' ', text)
         # Split into words
-        message_words = text.lower().split()
+        message_words = text.split()
         # Filter words
         filtered_words = [word for word in message_words 
-                         if word not in stop_words and len(word) > 2]
+                         if word not in STOP_WORDS and len(word) > 2]
         words.extend(filtered_words)
     
     common_words = Counter(words).most_common(20)
@@ -140,7 +141,7 @@ def emojies(selected_user, df):
     
     emojis = []
     for message in df['message']:
-        emojis.extend([c for c in message if c in emoji.EMOJI_DATA])
+        emojis.extend([c for c in str(message) if c in emoji.EMOJI_DATA])
     
     emoji_counts = Counter(emojis).most_common(15)
     return pd.DataFrame(emoji_counts, columns=['Emoji', 'Count'])
@@ -150,7 +151,7 @@ def monthly_timelines(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
-    timeline = df.groupby(['year', 'month_num', 'month']).count()['message'].reset_index()
+    timeline = df.groupby(['year', 'month_num', 'month']).size().reset_index(name='message')
     timeline = timeline.sort_values(['year', 'month_num'])
     timeline['time'] = timeline['month'] + " " + timeline['year'].astype(str)
     return timeline
@@ -160,7 +161,7 @@ def daily_timeline(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
-    return df.groupby('only_date').count()['message'].reset_index().sort_values('only_date')
+    return df.groupby('only_date').size().reset_index(name='message').sort_values('only_date')
 
 def week_activity_map(selected_user, df):
     """Get weekday activity"""
@@ -187,7 +188,6 @@ def activity_heatmap(selected_user, df):
     day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     df['day_name'] = pd.Categorical(df['day_name'], categories=day_order, ordered=True)
     
-    # FIXED: Added observed=False to silence the FutureWarning
     pivot_table = df.pivot_table(
         index='day_name',
         columns='period',
