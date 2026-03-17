@@ -555,4 +555,17 @@ else:
             </p>
             <ul style="font-size: 1.1rem; line-height: 2;">
                 <li>📊 Message statistics and trends</li>
-                <li>📅 Activity timelines and
+                <li>📅 Activity timelines and patterns</li>
+                <li>🔥 Interactive heatmaps</li>
+                <li>👥 User participation analysis</li>
+                <li>☁️ Word clouds and text analysis</li>
+                <li>😊 Emoji usage tracking</li>
+            </ul>
+            <div class="info-box">
+                <strong>💡 Tip:</strong> Export your chat without media for best results!<br>
+                <strong>📌 Supports both:</strong><br>
+                • 05/09/25, 10:21 am - Message<br>
+                • 14/07/25, 12:30 - Message
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
