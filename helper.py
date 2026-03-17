@@ -5,6 +5,20 @@ from collections import Counter
 import emoji
 import re
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+
+# Try to set a font that supports emojis (this helps with the glyph warnings)
+try:
+    # Look for a font that supports emojis (common on Linux/Colab)
+    font_dirs = ['/usr/share/fonts/truetype/noto/', '/usr/share/fonts/truetype/dejavu/']
+    for font_dir in font_dirs:
+        if fm.findSystemFonts(fontpaths=font_dir):
+            plt.rcParams['font.family'] = 'sans-serif'
+            plt.rcParams['font.sans-serif'] = ['Noto Color Emoji', 'DejaVu Sans', 'Apple Color Emoji', 'Segoe UI Emoji']
+            break
+except:
+    pass # Fall back to default if no emoji font found
 
 extractor = URLExtract()
 
@@ -178,12 +192,14 @@ def activity_heatmap(selected_user, df):
     day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     df['day_name'] = pd.Categorical(df['day_name'], categories=day_order, ordered=True)
     
+    # FIXED: Added observed=False to silence the FutureWarning
     pivot_table = df.pivot_table(
         index='day_name',
         columns='period',
         values='message',
         aggfunc='count',
-        fill_value=0
+        fill_value=0,
+        observed=False
     )
     
     return pivot_table
