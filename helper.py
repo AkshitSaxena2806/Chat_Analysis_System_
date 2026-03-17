@@ -53,7 +53,7 @@ def workcloud(selected_user, df, max_words=150):
                  'hogi', 'sakta', 'sakte', 'sakti', 'chahiye', 'apna', 'tum', 'aap',
                  'main', 'hum', 'yeh', 'woh', 'kya', 'kyun', 'kaise', 'kahan', 'kab',
                  'kitna', 'kitne', 'itna', 'utna', 'jab', 'tab', 'jahan', 'tahan',
-                 'jaisa', 'aisa', 'waisa', 'maam', 'ma\'am', 'sir'}
+                 'jaisa', 'aisa', 'waisa', 'maam', 'ma\'am', 'sir', 'miss', 'mrs', 'mr'}
     
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
@@ -78,7 +78,8 @@ def workcloud(selected_user, df, max_words=150):
         words = [word for word in words if word not in stop_words and len(word) > 2]
         return ' '.join(words)
     
-    all_text = ' '.join(temp['message'].apply(clean_text))
+    temp['clean_message'] = temp['message'].apply(clean_text)
+    all_text = ' '.join(temp['clean_message'].astype(str))
     
     if not all_text.strip():
         return None
