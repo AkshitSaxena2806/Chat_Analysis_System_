@@ -8,17 +8,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
-# Try to set a font that supports emojis (this helps with the glyph warnings)
+# Try to set a font that supports emojis
 try:
-    # Look for a font that supports emojis (common on Linux/Colab)
-    font_dirs = ['/usr/share/fonts/truetype/noto/', '/usr/share/fonts/truetype/dejavu/']
-    for font_dir in font_dirs:
-        if fm.findSystemFonts(fontpaths=font_dir):
-            plt.rcParams['font.family'] = 'sans-serif'
-            plt.rcParams['font.sans-serif'] = ['Noto Color Emoji', 'DejaVu Sans', 'Apple Color Emoji', 'Segoe UI Emoji']
-            break
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Noto Color Emoji', 'DejaVu Sans', 'Apple Color Emoji', 'Segoe UI Emoji']
 except:
-    pass # Fall back to default if no emoji font found
+    pass
 
 extractor = URLExtract()
 
