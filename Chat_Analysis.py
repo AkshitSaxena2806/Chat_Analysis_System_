@@ -9,24 +9,22 @@ def preprocess(data):
     2. 24-hour without AM/PM: 14/07/25, 12:30 - Message
     """
     
-    # Try multiple patterns
-    patterns = [
-        # Format 1: With AM/PM and special space character
-        r'(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})[ \s]?([APap][Mm]?)?\s-\s',
-        
-        # Format 2: Without AM/PM (your first file format)
-        r'(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})\s-\s',
-        
-        # Alternative patterns
-        r'\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}:\d{2}\]\s',
-        r'\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\s'
-    ]
-    
     lines = data.strip().split('\n')
     dates = []
-    messages = []
     users = []
-    texts = []
+    messages = []
+    
+    # Pattern for matching date at start of line
+    date_patterns = [
+        # Format with AM/PM and special space
+        r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})[ \s]?([APap][Mm]?)?\s-\s(.*)$',
+        # Format without AM/PM
+        r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})\s-\s(.*)$',
+    ]
+    
+    current_message = ""
+    current_date = None
+    current_user = None
     
     for line in lines:
         line = line.strip()
@@ -34,81 +32,74 @@ def preprocess(data):
             continue
         
         matched = False
-        for pattern in patterns:
+        for pattern in date_patterns:
             match = re.match(pattern, line)
             if match:
-                # Extract date part and message part
-                date_part = match.group(0).strip()
-                message_part = line[len(date_part):].strip()
+                # If we have a previous message, save it
+                if current_message and current_date:
+                    dates.append(current_date)
+                    users.append(current_user)
+                    messages.append(current_message.strip())
                 
-                # Clean date part
-                date_part = re.sub(r'[ ]', ' ', date_part)  # Replace special space
-                date_part = date_part.replace(' - ', '').strip()
+                # Parse new message
+                groups = match.groups()
+                date_str = f"{groups[0]}, {groups[1]}"
+                if len(groups) > 3 and groups[2]:  # Has AM/PM
+                    date_str += f" {groups[2]}"
                 
                 # Parse date
                 try:
+                    # Clean date string
+                    date_str = re.sub(r'[ ]', ' ', date_str)
+                    
                     # Try different date formats
                     date = None
+                    date_formats = [
+                        '%d/%m/%y, %I:%M %p',
+                        '%d/%m/%Y, %I:%M %p',
+                        '%d/%m/%y, %H:%M',
+                        '%d/%m/%Y, %H:%M',
+                    ]
                     
-                    # Try with AM/PM
-                    if 'am' in date_part.lower() or 'pm' in date_part.lower():
-                        # Remove any special characters
-                        date_clean = re.sub(r'[ ]', ' ', date_part)
-                        date_formats = [
-                            '%d/%m/%y, %I:%M %p',
-                            '%d/%m/%Y, %I:%M %p',
-                            '%d/%m/%y, %I:%M%p',
-                            '%d/%m/%Y, %I:%M%p'
-                        ]
-                        for fmt in date_formats:
-                            try:
-                                date = datetime.strptime(date_clean, fmt)
-                                break
-                            except:
-                                continue
-                    
-                    # Try without AM/PM (24-hour format)
-                    if date is None:
-                        date_clean = re.sub(r'[ ]', ' ', date_part)
-                        date_formats = [
-                            '%d/%m/%y, %H:%M',
-                            '%d/%m/%Y, %H:%M',
-                            '%d/%m/%y %H:%M',
-                            '%d/%m/%Y %H:%M'
-                        ]
-                        for fmt in date_formats:
-                            try:
-                                date = datetime.strptime(date_clean, fmt)
-                                break
-                            except:
-                                continue
+                    for fmt in date_formats:
+                        try:
+                            date = datetime.strptime(date_str, fmt)
+                            break
+                        except:
+                            continue
                     
                     if date:
-                        dates.append(date)
+                        current_date = date
+                        message_part = groups[-1]
                         
                         # Extract user and message
                         if ': ' in message_part:
                             user, msg = message_part.split(': ', 1)
-                            users.append(user.strip())
-                            texts.append(msg.strip())
+                            current_user = user.strip()
+                            current_message = msg.strip()
                         else:
                             # System message
                             msg_lower = message_part.lower()
                             if any(word in msg_lower for word in ['added', 'created', 'changed', 'left', 'joined', 'group', 'icon', 'deleted']):
-                                users.append("System")
+                                current_user = "System"
                             else:
-                                users.append("System")
-                            texts.append(message_part)
+                                current_user = "System"
+                            current_message = message_part
                         
                         matched = True
                         break
                 except:
                     continue
         
-        if not matched:
-            # Handle multi-line messages (append to last message)
-            if dates and texts:
-                texts[-1] = texts[-1] + "\n" + line
+        if not matched and current_message:
+            # This is a continuation of the previous message
+            current_message += "\n" + line
+    
+    # Add the last message
+    if current_message and current_date:
+        dates.append(current_date)
+        users.append(current_user)
+        messages.append(current_message.strip())
     
     if len(dates) == 0:
         return pd.DataFrame()
@@ -117,7 +108,7 @@ def preprocess(data):
     df = pd.DataFrame({
         'date': dates,
         'user': users,
-        'message': texts
+        'message': messages
     })
     
     # Add time-based columns
