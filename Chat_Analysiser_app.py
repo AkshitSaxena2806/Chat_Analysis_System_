@@ -72,6 +72,11 @@ st.markdown("""
         border-left: 5px solid #25D366;
         margin-bottom: 1rem;
         transition: transform 0.3s ease;
+        color: #212529;
+    }
+    .feature-card h4 {
+        color: #128C7E;
+        margin-top: 0;
     }
     .feature-card:hover {
         transform: translateX(10px);
@@ -442,7 +447,10 @@ if uploaded_file:
                         st.pyplot(fig)
                         plt.close()
                     else:
-                        st.info("Not enough text data for word cloud")
+                        if getattr(helper, "WORDCLOUD_AVAILABLE", True) is False:
+                            st.warning("Word cloud dependency isn't available in this deployment.")
+                        else:
+                            st.info("Not enough text data for word cloud")
                 
                 with col2:
                     st.subheader("📊 Most Common Words")
