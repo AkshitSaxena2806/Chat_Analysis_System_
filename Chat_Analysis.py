@@ -7,6 +7,7 @@ def preprocess(data):
     Preprocess WhatsApp chat data – supports:
       1) 05/09/25, 10:21 am - Message
       2) 14/07/25, 12:30 - Message
+      3) 27/08/24, 19:32 - ~ Lucky porwal created group
     """
     lines = data.strip().split('\n')
     dates = []
@@ -19,6 +20,8 @@ def preprocess(data):
         r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})[ \s]?([APap][Mm]?)?\s-\s(.*)$',
         # without AM/PM
         r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})\s-\s(.*)$',
+        # with special characters in username
+        r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2})\s-\s(.+?):\s(.*)$'
     ]
 
     current_message = ""
@@ -41,9 +44,18 @@ def preprocess(data):
                     messages.append(current_message.strip())
 
                 groups = match.groups()
-                date_str = f"{groups[0]}, {groups[1]}"
-                if len(groups) > 3 and groups[2]:          # AM/PM present
-                    date_str += f" {groups[2]}"
+                
+                # Handle different pattern structures
+                if len(groups) == 4:  # Pattern with user and message
+                    date_str = f"{groups[0]}, {groups[1]}"
+                    if groups[2]:  # AM/PM present
+                        date_str += f" {groups[2]}"
+                    message_part = groups[3]
+                elif len(groups) == 3:  # Pattern without AM/PM
+                    date_str = f"{groups[0]}, {groups[1]}"
+                    message_part = groups[2]
+                else:
+                    continue
 
                 # Clean possible special space
                 date_str = re.sub(r'[ ]', ' ', date_str)
@@ -65,7 +77,6 @@ def preprocess(data):
 
                 if date:
                     current_date = date
-                    message_part = groups[-1]
 
                     # Extract user and message
                     if ': ' in message_part:
@@ -77,7 +88,7 @@ def preprocess(data):
                         msg_lower = message_part.lower()
                         if any(word in msg_lower for word in
                                ['added', 'created', 'changed', 'left', 'joined',
-                                'group', 'icon', 'deleted']):
+                                'group', 'icon', 'deleted', 'messages and calls']):
                             current_user = "System"
                         else:
                             current_user = "System"
@@ -105,11 +116,18 @@ def preprocess(data):
         'message': messages
     })
 
+    # Remove system messages for cleaner analysis
+    df = df[~df['user'].str.contains('System', na=False)]
+    
+    # Reset index
+    df = df.reset_index(drop=True)
+    
     # Add time-based columns
     df = add_time_columns(df)
     return df
 
 def add_time_columns(df):
+    """Add time-based columns for analysis"""
     df["year"] = df["date"].dt.year
     df["month"] = df["date"].dt.month_name()
     df["month_num"] = df["date"].dt.month
