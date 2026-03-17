@@ -62,7 +62,7 @@ def preprocess(data):
     
     # If still no valid dates, let pandas infer
     if not date_parsed or df["date"].isna().all():
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+       df["date"] = pd.to_datetime(df["date"], errors="coerce")
     
     # Drop rows with invalid dates
     df = df.dropna(subset=['date'])
