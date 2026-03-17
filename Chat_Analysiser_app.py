@@ -446,9 +446,6 @@ if uploaded_file:
                 
                 with col2:
                     st.subheader("📊 Most Common Words")
-                    common_words = helper.most
-                                with col2:
-                    st.subheader("📊 Most Common Words")
                     common_words = helper.most_common_words(selected_user, df)
                     if not common_words.empty:
                         fig = px.bar(common_words.head(10), 
