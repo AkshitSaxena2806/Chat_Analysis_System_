@@ -1,10 +1,12 @@
-streamlit==1.22.0
+streamlit==1.25.0
 pandas==1.5.3
-numpy==1.23.5
+numpy==1.24.3
 matplotlib==3.7.1
 seaborn==0.12.2
 plotly==5.14.1
-emoji==1.7.0
-wordcloud==1.8.1
+emoji==2.2.0
+wordcloud==1.8.2.2
 urlextract==1.7.1
-pillow==9.4.0
+pillow==9.5.0
+setuptools==68.0.0
+wheel==0.40.0
