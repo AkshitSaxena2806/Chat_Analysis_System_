@@ -50,7 +50,7 @@ def workcloud(selected_user, df, max_words=200):
                      'hoga', 'hoge', 'hogi', 'sakta', 'sakte', 'sakti', 'chahiye',
                      'apna', 'tum', 'aap', 'main', 'hum', 'yeh', 'woh', 'kya', 'kyun',
                      'kaise', 'kahan', 'kab', 'kitna', 'kitne', 'itna', 'utna', 'jab',
-                     'tab', 'jahan', 'tahan', 'jaisa', 'aisa', 'waisa'}
+                     'tab', 'jahan', 'tahan', 'jaisa', 'aisa', 'waisa', 'maam', 'ma\'am'}
     
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
