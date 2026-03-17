@@ -1,57 +1,17 @@
+import re
+from collections import Counter
+
+import emoji
+import numpy as np
+import pandas as pd
+from urlextract import URLExtract
+
 try:
     from wordcloud import WordCloud
     WORDCLOUD_AVAILABLE = True
-except ImportError:
+except Exception:
+    WordCloud = None
     WORDCLOUD_AVAILABLE = False
-    print("WordCloud not available - install with: pip install wordcloud")
-
-# Then modify the workcloud function:
-def workcloud(selected_user, df, max_words=150):
-    """Generate word cloud"""
-    if not WORDCLOUD_AVAILABLE:
-        return None
-        
-    if selected_user != 'Overall':
-        df = df[df['user'] == selected_user]
-
-    # Filter out system messages and media omitted
-    temp = df[~df['user'].str.contains('System|group_notification', na=False, regex=True)]
-    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False, regex=False)]
-    
-    if len(temp) == 0:
-        return None
-
-    def clean_text(text):
-        text = str(text).lower()
-        # Remove URLs
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-        # Remove emojis
-        text = ''.join([c for c in text if c not in emoji.EMOJI_DATA])
-        # Remove punctuation and numbers
-        text = re.sub(r'[^\w\s]', ' ', text)
-        text = re.sub(r'\d+', '', text)
-        # Split and filter words
-        words = text.split()
-        words = [w for w in words if w not in STOP_WORDS and len(w) > 2]
-        return ' '.join(words)
-
-    clean_messages = temp['message'].apply(clean_text)
-    all_text = ' '.join(clean_messages.astype(str))
-    
-    if not all_text.strip():
-        return None
-
-    wc = WordCloud(width=800, height=400, max_words=max_words,
-                   background_color='white', colormap='viridis', 
-                   random_state=42, collocations=False)
-    return wc.generate(all_text)
-from urlextract import URLExtract
-from wordcloud import WordCloud
-import pandas as pd
-from collections import Counter
-import emoji
-import re
-import numpy as np
 
 extractor = URLExtract()
 
@@ -124,7 +84,10 @@ def most_busy_users(df):
     return x, new_df
 
 def workcloud(selected_user, df, max_words=150):
-    """Generate word cloud"""
+    """Generate word cloud (returns None if unavailable)."""
+    if not WORDCLOUD_AVAILABLE:
+        return None
+
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
 
@@ -159,10 +122,15 @@ def workcloud(selected_user, df, max_words=150):
     if not all_text.strip():
         return None
 
-    # Generate word cloud
-    wc = WordCloud(width=800, height=400, max_words=max_words,
-                   background_color='white', colormap='viridis', 
-                   random_state=42, collocations=False)
+    wc = WordCloud(
+        width=800,
+        height=400,
+        max_words=max_words,
+        background_color='white',
+        colormap='viridis',
+        random_state=42,
+        collocations=False,
+    )
     return wc.generate(all_text)
 
 def most_common_words(selected_user, df):
