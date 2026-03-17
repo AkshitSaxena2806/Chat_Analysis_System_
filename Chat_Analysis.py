@@ -60,9 +60,9 @@ def preprocess(data):
         except:
             continue
     
-    # If still no valid dates, let pandas infer
+    # If still no valid dates, let pandas infer (FIXED: removed infer_datetime_format)
     if not date_parsed or df["date"].isna().all():
-       df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
     
     # Drop rows with invalid dates
     df = df.dropna(subset=['date'])
@@ -164,20 +164,20 @@ def add_time_columns(df):
     df["hour"] = df["date"].dt.hour
     df["minute"] = df["date"].dt.minute
     
-    # Add period column for heatmap
+    # Add period column for heatmap (using text labels to avoid font issues)
     def get_period(hour):
         if hour < 4:
-            return '🌙 Late Night (0-4)'
+            return 'Late Night (0-4)'
         elif hour < 8:
-            return '🌅 Early Morning (4-8)'
+            return 'Early Morning (4-8)'
         elif hour < 12:
-            return '☀️ Morning (8-12)'
+            return 'Morning (8-12)'
         elif hour < 16:
-            return '⛅ Afternoon (12-16)'
+            return 'Afternoon (12-16)'
         elif hour < 20:
-            return '🌆 Evening (16-20)'
+            return 'Evening (16-20)'
         else:
-            return '🌃 Night (20-24)'
+            return 'Night (20-24)'
     
     df['period'] = df['hour'].apply(get_period)
     
