@@ -194,6 +194,10 @@ with st.sidebar:
         1. Open chat → Contact name → Export Chat
         2. Choose **Without Media**
         3. Save the .txt file
+        
+        **Supported Formats:**
+        - 24-hour: 14/07/25, 12:30 - Message
+        - 12-hour: 14/07/25, 12:30 PM - Message
         """)
 
 # Main header
@@ -336,22 +340,29 @@ if uploaded_file:
                     week_map = helper.week_activity_map(selected_user, df)
                     month_map = helper.month_activity_map(selected_user, df)
                     
+                    # Calculate safely
+                    most_active_day = week_map.idxmax() if not week_map.empty else 'N/A'
+                    most_active_month = month_map.idxmax() if not month_map.empty else 'N/A'
+                    avg_words = (total_words / num_messages) if num_messages > 0 else 0
+                    
                     st.markdown(f"""
                     <div class="feature-card">
                         <h4>⏰ Activity Pattern</h4>
-                        <p>• <b>Most active day:</b> {week_map.idxmax() if not week_map.empty else 'N/A'}</p>
-                        <p>• <b>Most active month:</b> {month_map.idxmax() if not month_map.empty else 'N/A'}</p>
-                        <p>• <b>Avg words/message:</b> {total_words/num_messages:.1f if num_messages > 0 else 0}</p>
+                        <p>• <b>Most active day:</b> {most_active_day}</p>
+                        <p>• <b>Most active month:</b> {most_active_month}</p>
+                        <p>• <b>Avg words/message:</b> {avg_words:.1f}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 with col2:
-                    media_pct = (num_media/num_messages*100) if num_messages > 0 else 0
+                    media_pct = (num_media / num_messages * 100) if num_messages > 0 else 0
+                    text_messages = num_messages - num_media if num_messages > 0 else 0
+                    
                     st.markdown(f"""
                     <div class="feature-card">
                         <h4>📊 Content Mix</h4>
                         <p>• <b>Media percentage:</b> {media_pct:.1f}%</p>
-                        <p>• <b>Text messages:</b> {num_messages - num_media:,}</p>
+                        <p>• <b>Text messages:</b> {text_messages:,}</p>
                         <p>• <b>Links shared:</b> {num_links}</p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -396,6 +407,10 @@ if uploaded_file:
                         fig.update_traces(marker_color='#667eea')
                         fig.update_layout(height=400)
                         st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Peak hour
+                        peak_hour = hourly.loc[hourly['count'].idxmax(), 'hour']
+                        st.info(f"⏰ **Peak activity time:** {int(peak_hour):02d}:00 ({'AM' if peak_hour < 12 else 'PM'})")
                 
                 # Activity Heatmap
                 progress_bar.progress(60)
@@ -412,6 +427,8 @@ if uploaded_file:
                     plt.xlabel('Time Period')
                     st.pyplot(fig)
                     plt.close()
+                else:
+                    st.info("Not enough data for heatmap")
                 
                 # User Analysis (for Overall view)
                 if selected_user == 'Overall':
@@ -424,17 +441,19 @@ if uploaded_file:
                     busy_users, user_df = helper.most_busy_users(df)
                     
                     with col1:
-                        fig = px.pie(values=busy_users.values, names=busy_users.index,
-                                    title='Message Distribution by User')
-                        fig.update_traces(textposition='inside', textinfo='percent+label')
-                        st.plotly_chart(fig, use_container_width=True)
+                        if not busy_users.empty:
+                            fig = px.pie(values=busy_users.values, names=busy_users.index,
+                                        title='Message Distribution by User')
+                            fig.update_traces(textposition='inside', textinfo='percent+label')
+                            st.plotly_chart(fig, use_container_width=True)
                     
                     with col2:
-                        st.dataframe(
-                            user_df.style.highlight_max(color='#90EE90'),
-                            use_container_width=True,
-                            height=400
-                        )
+                        if not user_df.empty:
+                            st.dataframe(
+                                user_df.style.highlight_max(color='#90EE90'),
+                                use_container_width=True,
+                                height=400
+                            )
                 
                 # Text Analysis
                 progress_bar.progress(80)
@@ -489,6 +508,8 @@ if uploaded_file:
                         fig = px.pie(values=top_emojis['Count'], names=top_emojis['Emoji'],
                                     title='Top 8 Emojis')
                         st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No emojis found")
                 
                 progress_bar.progress(100)
                 status_text.text("✅ Analysis Complete!")
@@ -522,6 +543,13 @@ Total Messages: {num_messages:,}
 Total Words: {total_words:,}
 Media Shared: {num_media}
 Links Shared: {num_links}
+
+ACTIVITY SUMMARY
+---------------
+Most Active Day: {most_active_day}
+Most Active Month: {most_active_month}
+Average Words/Message: {avg_words:.1f}
+Media Percentage: {media_pct:.1f}%
 
 """
                     st.download_button(
@@ -559,7 +587,8 @@ else:
                 <li>😊 Emoji usage tracking</li>
             </ul>
             <div class="info-box">
-                <strong>💡 Tip:</strong> Export your chat without media for best results!
+                <strong>💡 Tip:</strong> Export your chat without media for best results!<br>
+                <strong>📌 Supported:</strong> 24-hour (14/07/25, 12:30 -) and 12-hour formats
             </div>
         </div>
         """, unsafe_allow_html=True)
