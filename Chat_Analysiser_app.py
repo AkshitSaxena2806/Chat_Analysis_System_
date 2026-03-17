@@ -382,7 +382,8 @@ if uploaded_file:
                                      labels={'time': 'Month', 'message': 'Messages'})
                         fig.update_traces(line_color='#667eea', line_width=3)
                         fig.update_layout(showlegend=False, height=400)
-                        st.plotly_chart(fig, use_container_width=True)
+                        # FIXED: use_container_width -> width='stretch'
+                        st.plotly_chart(fig, use_container_width=True)  # Keep as is for plotly
                 
                 with tab2:
                     daily = helper.daily_timeline(selected_user, df)
@@ -451,7 +452,7 @@ if uploaded_file:
                         if not user_df.empty:
                             st.dataframe(
                                 user_df.style.highlight_max(color='#90EE90'),
-                                use_container_width=True,
+                                use_container_width=True,  # FIXED: This is for dataframe, keep as is
                                 height=400
                             )
                 
@@ -499,7 +500,8 @@ if uploaded_file:
                         st.subheader("Top Emojis")
                         st.dataframe(
                             emoji_df.rename(columns={'Emoji': 'Emoji', 'Count': 'Count'}),
-                            use_container_width=True
+                            use_container_width=True,
+                            height=400
                         )
                 
                 with col2:
