@@ -3,68 +3,53 @@ import pandas as pd
 
 def preprocess(data):
     """
-    Preprocess WhatsApp chat data supporting both 12-hour and 24-hour time formats
+    Preprocess WhatsApp chat data - specifically for 24-hour format: DD/MM/YY, HH:MM - 
     """
     
-    # Try multiple date-time patterns
-    patterns = [
-        # 12-hour format with AM/PM (Indian/Android format)
-        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}\s[APap][Mm]\s-\s',
-        
-        # 24-hour format (European/iPhone format)
-        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}\s-\s',
-        
-        # Alternative formats
-        r'\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}:\d{2}\]\s',
-        r'\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\s'
-    ]
+    # Your exact pattern (24-hour format, no AM/PM)
+    pattern = r'\d{1,2}/\d{1,2}/\d{2},\s\d{1,2}:\d{2}\s-\s'
     
-    df = None
-    used_pattern = None
+    # Split the data
+    messages = re.split(pattern, data)[1:]
+    dates = re.findall(pattern, data)
     
-    # Try each pattern until one works
-    for pattern in patterns:
+    # Check if we got any data
+    if len(messages) == 0 or len(dates) == 0:
+        # Try alternative pattern (with 4-digit year)
+        pattern = r'\d{1,2}/\d{1,2}/\d{4},\s\d{1,2}:\d{2}\s-\s'
         messages = re.split(pattern, data)[1:]
         dates = re.findall(pattern, data)
         
-        if len(messages) > 0 and len(dates) > 0 and len(messages) == len(dates):
-            df = pd.DataFrame({
-                "user_message": messages,
-                "date": dates
-            })
-            used_pattern = pattern
-            break
+        if len(messages) == 0 or len(dates) == 0:
+            return pd.DataFrame()
     
-    # If no pattern matched, return empty DataFrame
-    if df is None or len(df) == 0:
-        return pd.DataFrame()
+    # Create DataFrame
+    df = pd.DataFrame({
+        "user_message": messages,
+        "date": dates
+    })
     
-    # Try to parse dates with different formats
-    date_formats = [
-        '%d/%m/%y, %I:%M %p - ',     # 12-hour: 13/03/22, 8:30 PM - 
-        '%d/%m/%Y, %I:%M %p - ',     # 12-hour with 4-digit year
-        '%d/%m/%y, %H:%M - ',        # 24-hour: 13/03/22, 20:30 - 
-        '%d/%m/%Y, %H:%M - ',        # 24-hour with 4-digit year
-        '[%d/%m/%y, %H:%M:%S] ',     # Alternative format with seconds
-        '%Y-%m-%d %H:%M:%S: '        # ISO format
-    ]
+    # Clean the date strings
+    df['date'] = df['date'].str.strip()
     
-    # Try each date format
-    for fmt in date_formats:
-        try:
+    # Parse dates - try different formats
+    try:
+        # Try with 2-digit year first (your format)
+        df["date"] = pd.to_datetime(
+            df["date"],
+            format="%d/%m/%y, %H:%M - ",
+            errors="coerce"
+        )
+        
+        # If that fails, try with 4-digit year
+        if df["date"].isna().all():
             df["date"] = pd.to_datetime(
                 df["date"],
-                format=fmt,
+                format="%d/%m/%Y, %H:%M - ",
                 errors="coerce"
             )
-            # If we got valid dates, break
-            if df["date"].notna().any():
-                break
-        except:
-            continue
-    
-    # If still no valid dates, try inferring format
-    if df["date"].isna().all():
+    except:
+        # If all else fails, let pandas infer
         df["date"] = pd.to_datetime(df["date"], infer_datetime_format=True, errors="coerce")
     
     # Drop rows with invalid dates
@@ -81,11 +66,19 @@ def preprocess(data):
         # Pattern for "user: message"
         split = re.split(r"^([^:]+):\s", msg)
         if len(split) > 2:
-            users.append(split[1])
-            texts.append(split[2])
+            # Clean user name (remove special characters)
+            user = split[1].strip()
+            user = re.sub(r'[~ ]', '', user)  # Remove special chars
+            users.append(user)
+            texts.append(split[2].strip())
         else:
-            users.append("group_notification")
-            texts.append(msg)
+            # Check if it's a system message
+            msg_lower = msg.lower()
+            if any(word in msg_lower for word in ['added', 'created', 'changed', 'left', 'joined', 'group', 'icon']):
+                users.append("group_notification")
+            else:
+                users.append("group_notification")
+            texts.append(msg.strip())
     
     df["user"] = users
     df["message"] = pd.Series(texts).astype(str)
