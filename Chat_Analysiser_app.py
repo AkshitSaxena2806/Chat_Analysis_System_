@@ -447,3 +447,361 @@ if uploaded_file:
                 with col2:
                     st.subheader("📊 Most Common Words")
                     common_words = helper.most
+                                with col2:
+                    st.subheader("📊 Most Common Words")
+                    common_words = helper.most_common_words(selected_user, df)
+                    if not common_words.empty:
+                        fig = px.bar(common_words.head(10), 
+                                   x='Frequency', 
+                                   y='Word', 
+                                   orientation='h', 
+                                   title='Top 10 Most Used Words',
+                                   color='Frequency',
+                                   color_continuous_scale='Greens')
+                        fig.update_layout(
+                            yaxis={'categoryorder': 'total ascending'},
+                            height=500,
+                            xaxis_title="Frequency",
+                            yaxis_title="Word"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No common words found")
+
+                # 7. Emoji Analysis
+                progress_bar.progress(90)
+                status_text.text("😊 Analyzing emoji usage...")
+                st.markdown("## 😊 Emoji Analysis")
+                
+                col1, col2 = st.columns(2)
+                emoji_df = helper.emojies(selected_user, df)
+                
+                with col1:
+                    if not emoji_df.empty:
+                        st.subheader("📋 Top Emojis")
+                        
+                        # Create a display version with emoji and count
+                        display_df = emoji_df.copy()
+                        display_df['Emoji with Name'] = display_df['Emoji'] + '  '  # Add space for better display
+                        
+                        # Style the dataframe
+                        styled_emoji = display_df.style.background_gradient(cmap='Blues', subset=['Count'])
+                        st.dataframe(styled_emoji, use_container_width=True, height=500)
+                    else:
+                        st.info("No emojis found in messages")
+                
+                with col2:
+                    if not emoji_df.empty:
+                        st.subheader("🥧 Emoji Distribution")
+                        top_emojis = emoji_df.head(8)  # Top 8 for better visualization
+                        
+                        fig = px.pie(
+                            values=top_emojis['Count'], 
+                            names=top_emojis['Emoji'], 
+                            title='Top 8 Emojis Used',
+                            hole=0.3
+                        )
+                        fig.update_traces(textposition='inside', textinfo='percent+label')
+                        fig.update_layout(height=500)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No emoji data available")
+
+                # 8. Additional Insights (New Section)
+                progress_bar.progress(95)
+                status_text.text("🎯 Generating additional insights...")
+                st.markdown("## 🎯 Additional Insights")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Message length analysis
+                    st.subheader("📏 Message Length Distribution")
+                    
+                    if selected_user != 'Overall':
+                        user_df = df[df['user'] == selected_user]
+                    else:
+                        user_df = df
+                    
+                    # Calculate message lengths (excluding media)
+                    text_messages = user_df[~user_df['message'].str.contains('<Media omitted>', na=False)]
+                    if len(text_messages) > 0:
+                        text_messages['msg_length'] = text_messages['message'].str.len()
+                        
+                        # Create bins for message lengths
+                        bins = [0, 10, 25, 50, 100, 200, 500, 1000, float('inf')]
+                        labels = ['0-10', '11-25', '26-50', '51-100', '101-200', '201-500', '501-1000', '1000+']
+                        
+                        text_messages['length_category'] = pd.cut(text_messages['msg_length'], bins=bins, labels=labels)
+                        length_dist = text_messages['length_category'].value_counts().sort_index()
+                        
+                        fig = px.bar(
+                            x=length_dist.index, 
+                            y=length_dist.values,
+                            title='Message Length Distribution',
+                            labels={'x': 'Message Length (characters)', 'y': 'Count'},
+                            color=length_dist.values,
+                            color_continuous_scale='Viridis'
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No text messages to analyze")
+                
+                with col2:
+                    # Busiest days analysis
+                    st.subheader("📅 Busiest Days")
+                    
+                    if not week_map.empty:
+                        week_df = week_map.reset_index()
+                        week_df.columns = ['Day', 'Messages']
+                        
+                        # Reorder days
+                        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                        week_df['Day'] = pd.Categorical(week_df['Day'], categories=day_order, ordered=True)
+                        week_df = week_df.sort_values('Day')
+                        
+                        fig = px.bar(
+                            week_df,
+                            x='Day',
+                            y='Messages',
+                            title='Messages by Day of Week',
+                            color='Messages',
+                            color_continuous_scale='Reds'
+                        )
+                        fig.update_layout(xaxis_tickangle=-45)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No weekday data available")
+
+                # 9. Busiest Months
+                st.markdown("## 📊 Monthly Activity Patterns")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if not month_map.empty:
+                        month_df = month_map.reset_index()
+                        month_df.columns = ['Month', 'Messages']
+                        
+                        fig = px.bar(
+                            month_df,
+                            x='Month',
+                            y='Messages',
+                            title='Messages by Month',
+                            color='Messages',
+                            color_continuous_scale='Blues'
+                        )
+                        fig.update_layout(xaxis_tickangle=-45)
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Year-over-year comparison if multiple years
+                    if 'year' in df.columns:
+                        year_counts = df['year'].value_counts().sort_index()
+                        
+                        if len(year_counts) > 1:
+                            year_df = year_counts.reset_index()
+                            year_df.columns = ['Year', 'Messages']
+                            
+                            fig = px.bar(
+                                year_df,
+                                x='Year',
+                                y='Messages',
+                                title='Messages by Year',
+                                color='Messages',
+                                color_continuous_scale='Purples'
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.info(f"Data available only for {int(year_counts.index[0])}")
+                    else:
+                        st.info("Year data not available")
+
+                # 10. Conversation Flow Analysis (for Overall only)
+                if selected_user == 'Overall' and len(df['user'].unique()) >= 2:
+                    st.markdown("## 💬 Conversation Flow Analysis")
+                    
+                    # Get top users for flow analysis
+                    top_users = df['user'].value_counts().head(5).index.tolist()
+                    
+                    # Create flow data
+                    flow_data = []
+                    for i in range(len(df) - 1):
+                        current_user = df.iloc[i]['user']
+                        next_user = df.iloc[i + 1]['user']
+                        
+                        if current_user in top_users and next_user in top_users and current_user != next_user:
+                            flow_data.append({
+                                'From': current_user,
+                                'To': next_user
+                            })
+                    
+                    if flow_data:
+                        flow_df = pd.DataFrame(flow_data)
+                        flow_counts = flow_df.groupby(['From', 'To']).size().reset_index(name='Count')
+                        flow_counts = flow_counts.sort_values('Count', ascending=False).head(10)
+                        
+                        st.subheader("🔄 Top Conversation Flows")
+                        st.dataframe(flow_counts, use_container_width=True)
+                        
+                        # Simple chord diagram alternative - sunburst
+                        fig = px.sunburst(
+                            flow_counts,
+                            path=['From', 'To'],
+                            values='Count',
+                            title='Conversation Flow Between Users'
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Not enough conversation flow data")
+
+                # Final progress update
+                progress_bar.progress(100)
+                status_text.text("✅ Analysis Complete!")
+                
+                # Clear progress indicators after a delay
+                st.empty()
+                progress_bar.empty()
+                status_text.empty()
+
+                # Download section
+                st.markdown("---")
+                st.markdown("## 📥 Download Results")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    # Download processed data as CSV
+                    csv_data = df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📊 Download Processed Data (CSV)",
+                        data=csv_data,
+                        file_name=f"whatsapp_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                
+                with col2:
+                    # Generate and download summary report
+                    report = f"""WHATSAPP CHAT ANALYSIS REPORT
+================================
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+User Analyzed: {selected_user}
+
+STATISTICS
+----------
+Total Messages: {num:,}
+Total Words: {words:,}
+Media Shared: {media}
+Links Shared: {links}
+Average Words/Message: {avg_words:.1f}
+Media Percentage: {media_pct:.1f}%
+
+ACTIVITY SUMMARY
+---------------
+Most Active Day: {most_day}
+Most Active Month: {most_month}
+Total Conversation Days: {days}
+
+CONTENT ANALYSIS
+---------------
+Text Messages: {text_msg:,}
+Media Messages: {media}
+Links Shared: {links}
+
+Top 5 Users (Overall):
+"""
+                    
+                    if selected_user == 'Overall':
+                        top_users_list = df['user'].value_counts().head(5)
+                        for user, count in top_users_list.items():
+                            report += f"  • {user}: {count} messages ({count/len(df)*100:.1f}%)\n"
+                    
+                    report += """
+================================
+End of Report
+"""
+                    
+                    st.download_button(
+                        label="📄 Download Report (TXT)",
+                        data=report,
+                        file_name=f"whatsapp_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                
+                with col3:
+                    # Download emoji summary if available
+                    if not emoji_df.empty:
+                        emoji_csv = emoji_df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="😊 Download Emoji Data (CSV)",
+                            data=emoji_csv,
+                            file_name=f"emoji_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("No emoji data to download")
+
+    except Exception as e:
+        st.error(f"❌ An error occurred: {str(e)}")
+        st.exception(e)  # This will show the full error trace for debugging
+        st.info("Please check your file format and try again. Make sure the file is a valid WhatsApp chat export.")
+
+else:
+    # Welcome screen when no file is uploaded
+    col1, col2 = st.columns([1, 1.5])
+    
+    with col1:
+        st.image("https://img.icons8.com/clouds/400/000000/whatsapp.png", width=300)
+    
+    with col2:
+        st.markdown("""
+        <div style="padding: 2rem;">
+            <h2 style="color: #25D366;">🚀 Get Started</h2>
+            <p style="font-size: 1.2rem;">Upload your WhatsApp chat export to unlock powerful insights:</p>
+            <ul style="font-size: 1.1rem; line-height: 2;">
+                <li>📊 Message statistics and trends</li>
+                <li>📅 Activity timelines and patterns</li>
+                <li>🔥 Interactive heatmaps</li>
+                <li>👥 User participation analysis</li>
+                <li>☁️ Word clouds and text analysis</li>
+                <li>😊 Emoji usage tracking</li>
+                <li>📏 Message length distribution</li>
+                <li>💬 Conversation flow analysis</li>
+            </ul>
+            <div class="info-box">
+                <strong>💡 Tip:</strong> Export your chat without media for best results!<br>
+                <strong>📌 Supports both formats:</strong><br>
+                • 05/09/25, 10:21 am - Message<br>
+                • 14/07/25, 12:30 - Message<br>
+                <br>
+                <strong>📊 Sample Data:</strong> Your uploaded files show this works with real WhatsApp exports!
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Show sample preview of what's supported
+    st.markdown("---")
+    st.markdown("### 📋 Supported Chat Format Examples")
+    
+    sample_data = pd.DataFrame({
+        'Format': ['With AM/PM', '24-hour', 'With Special Characters'],
+        'Example': [
+            '05/09/25, 10:21 am - Silky Di: <Media omitted>',
+            '14/07/25, 12:30 - Sneha Ma\'am MU added you',
+            '27/08/24, 19:32 - ~ Lucky porwal created group "B_tech, mechanical 2st sem English"'
+        ]
+    })
+    
+    st.dataframe(sample_data, use_container_width=True)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div class="footer">
+    <p>Made with ❤️ using Streamlit | WhatsApp Chat Analyzer v2.0</p>
+    <p>© 2024 - All rights reserved</p>
+</div>
+""", unsafe_allow_html=True)
