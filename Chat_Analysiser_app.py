@@ -448,7 +448,7 @@ if uploaded_file:
                         plt.close()
                     else:
                         if getattr(helper, "WORDCLOUD_AVAILABLE", True) is False:
-                            st.warning("Word cloud dependency isn't available in this deployment.")
+                            st.error("WordCloud isn't installed on this deployment (install `wordcloud` + system libs).")
                         else:
                             st.info("Not enough text data for word cloud")
                 
