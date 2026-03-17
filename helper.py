@@ -5,8 +5,6 @@ from collections import Counter
 import emoji
 import re
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 
 # Initialize URL extractor
 extractor = URLExtract()
@@ -34,11 +32,10 @@ def fetch_stats(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     
-    num_messages = df.shape[0]
+    num_messages = len(df)
     
     words = []
     for message in df['message']:
-        # Split by spaces and filter out empty strings
         words.extend([word for word in str(message).split() if word.strip()])
     
     num_media_messages = df[df['message'].str.contains('<Media omitted>', na=False, regex=False)].shape[0]
@@ -56,7 +53,7 @@ def most_busy_users(df):
     user_counts = user_counts[~user_counts.index.isin(['System', 'group_notification'])]
     
     x = user_counts.head(10)
-    new_df = round((user_counts / df.shape[0]) * 100, 2).reset_index()
+    new_df = round((user_counts / len(df)) * 100, 2).reset_index()
     new_df.columns = ['User', 'Percentage']
     return x, new_df
 
