@@ -279,42 +279,6 @@ if uploaded_file:
                     with cols[i]:
                         st.markdown(f'<div class="stat-card"><div class="stat-number">{val:,}</div><div class="stat-label">{label}</div></div>', unsafe_allow_html=True)
 
-                # 2. Quick insights
-                progress_bar.progress(20)
-                status_text.text("💡 Generating insights...")
-                
-                week_map = helper.week_activity_map(selected_user, df)
-                month_map = helper.month_activity_map(selected_user, df)
-                
-                most_day = week_map.idxmax() if not week_map.empty else 'N/A'
-                most_month = month_map.idxmax() if not month_map.empty else 'N/A'
-                avg_words = (words / num) if num > 0 else 0
-                media_pct = (media / num * 100) if num > 0 else 0
-                text_msg = num - media if num > 0 else 0
-
-                st.markdown("## 💡 Quick Insights")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"""
-                    <div class="feature-card">
-                        <h4>⏰ Activity Pattern</h4>
-                        <p>• <b>Most active day:</b> {most_day}</p>
-                        <p>• <b>Most active month:</b> {most_month}</p>
-                        <p>• <b>Avg words/message:</b> {avg_words:.1f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown(f"""
-                    <div class="feature-card">
-                        <h4>📊 Content Mix</h4>
-                        <p>• <b>Media percentage:</b> {media_pct:.1f}%</p>
-                        <p>• <b>Text messages:</b> {text_msg:,}</p>
-                        <p>• <b>Links shared:</b> {links}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
                 # 3. Timeline Analysis
                 progress_bar.progress(40)
                 status_text.text("📅 Creating timelines...")
