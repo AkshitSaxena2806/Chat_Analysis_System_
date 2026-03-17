@@ -5,16 +5,10 @@ import pandas as pd
 import numpy as np
 import Chat_Analysis
 import helper
-import zipfile
-import os
-from pathlib import Path
-import tempfile
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-import base64
 import emoji
-from collections import Counter
 
 # Page configuration
 st.set_page_config(
@@ -561,17 +555,4 @@ else:
             </p>
             <ul style="font-size: 1.1rem; line-height: 2;">
                 <li>📊 Message statistics and trends</li>
-                <li>📅 Activity timelines and patterns</li>
-                <li>🔥 Interactive heatmaps</li>
-                <li>👥 User participation analysis</li>
-                <li>☁️ Word clouds and text analysis</li>
-                <li>😊 Emoji usage tracking</li>
-            </ul>
-            <div class="info-box">
-                <strong>💡 Tip:</strong> Export your chat without media for best results!<br>
-                <strong>📌 Supports both:</strong><br>
-                • 05/09/25, 10:21 am - Message<br>
-                • 14/07/25, 12:30 - Message
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+                <li>📅 Activity timelines and
