@@ -9,15 +9,13 @@ import zipfile
 import os
 from pathlib import Path
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 from wordcloud import WordCloud
 import base64
 from io import BytesIO
 import emoji
-from collections import Counter
-import calendar
 
 # Page configuration
 st.set_page_config(
@@ -44,10 +42,6 @@ st.markdown("""
         color: white;
         text-align: center;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s ease;
-    }
-    .stat-card:hover {
-        transform: translateY(-5px);
     }
     .stat-number {
         font-size: 2.5rem;
@@ -56,14 +50,6 @@ st.markdown("""
     .stat-label {
         font-size: 1rem;
         opacity: 0.9;
-    }
-    .feature-card {
-        background-color: white;
-        border-radius: 10px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 5px solid #075e54;
-        margin-bottom: 1rem;
     }
     .stButton>button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -84,15 +70,6 @@ st.markdown("""
         padding: 1rem;
         text-align: center;
     }
-    .insight-badge {
-        background-color: #075e54;
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        display: inline-block;
-        margin-right: 0.5rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -103,8 +80,6 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 if 'selected_user' not in st.session_state:
     st.session_state.selected_user = "Overall"
-if 'theme' not in st.session_state:
-    st.session_state.theme = "light"
 
 # Sidebar
 with st.sidebar:
@@ -115,7 +90,7 @@ with st.sidebar:
     # Upload options
     upload_option = st.radio(
         "Choose upload type:",
-        ["📄 Single Text File", "📦 Zip File", "🔗 Sample Data"],
+        ["📄 Single Text File", "📦 Zip File"],
         help="Upload a single WhatsApp chat export or multiple chats in a zip file"
     )
     
@@ -128,60 +103,22 @@ with st.sidebar:
             type="txt",
             help="Export chat without media from WhatsApp (supports both 12-hour and 24-hour formats)"
         )
-    elif upload_option == "📦 Zip File":
+    else:
         uploaded_zip = st.file_uploader(
             "Upload Zip file", 
             type="zip",
             help="Zip file containing multiple WhatsApp chat exports"
         )
-    else:
-        # Sample data option
-        st.info("📊 Using sample data for demonstration")
-        use_sample = st.button("Load Sample Data")
-        if use_sample:
-            # Create sample data
-            sample_data = """14/07/25, 12:30 - Messages and calls are end-to-end encrypted.
-18/07/25, 11:33 - Shweta: Good morning everyone! Today's class is in EEE department.
-18/07/25, 11:34 - Shweta: Machine lab at 11:45 AM
-21/07/25, 11:17 - Shweta: <Media omitted>
-21/07/25, 15:28 - Shweta: Assignment 1 is uploaded on GNUMS. Complete it by Friday.
-24/07/25, 12:04 - You changed the group name from "Sem- lll UHV ME" to "UHV ME"
-28/07/25, 10:36 - Shweta: How many of you are present today?
-28/07/25, 10:37 - Shweta: Come to eee machine lab
-31/07/25, 11:52 - Shweta: Where are you all?
-31/07/25, 11:54 - Shweta: Come immediately
-31/07/25, 11:55 - +91 96912 69907: Ma'am we are here
-02/08/25, 09:27 - Sneha Ma'am MU: Good morning students
-02/08/25, 09:27 - Sneha Ma'am MU: Are you coming today?
-11/08/25, 08:29 - Shweta: Good morning! How many present today?
-18/08/25, 11:17 - Shweta: https://youtu.be/ILDy6kYU-xQ?si=PCsReKIkty7o62M0
-26/08/25, 15:44 - Shweta: Share the brochure with your friends
-16/03/26, 21:34 - Shweta: POLL: Do you use AI like Chatgpt? OPTION: Yes (6 votes) OPTION: No (2 votes)"""
-            
-            # Create a temporary file-like object
-            from io import BytesIO
-            uploaded_file = BytesIO(sample_data.encode('utf-8'))
-            uploaded_file.name = "sample_chat.txt"
-            st.success("Sample data loaded! Click 'Analyze' to continue.")
     
-    # Advanced options in expander
-    with st.expander("⚙️ Advanced Options", expanded=False):
+    # Advanced options
+    with st.expander("⚙️ Advanced Options"):
         max_words = st.slider("Max words in wordcloud", 50, 300, 150)
-        min_word_length = st.slider("Minimum word length", 2, 5, 3)
-        show_media = st.checkbox("Include media messages in analysis", value=False)
-        show_system = st.checkbox("Include system messages", value=False)
-        date_range = st.checkbox("Filter by date range", value=False)
-    
-    # Theme selector
-    theme = st.radio("🎨 Theme", ["Light", "Dark"], index=0)
-    if theme != st.session_state.theme:
-        st.session_state.theme = theme
-        st.rerun()
+        show_media = st.checkbox("Include media messages in wordcloud", value=False)
 
 def process_chat_file(file_content, filename="uploaded_chat.txt"):
     """Process a single chat file"""
     try:
-        data = file_content.decode("utf-8", errors="ignore")
+        data = file_content.decode("utf-8")
         df = Chat_Analysis.preprocess(data)
         return df, None
     except Exception as e:
@@ -206,7 +143,7 @@ def process_zip_file(zip_file):
             
             for txt_file in txt_files:
                 try:
-                    with open(txt_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    with open(txt_file, 'r', encoding='utf-8') as f:
                         data = f.read()
                     df = Chat_Analysis.preprocess(data)
                     if not df.empty:
@@ -242,134 +179,8 @@ Total Words: {words}
 Media Shared: {media}
 Links Shared: {links}
 
-📈 ACTIVITY SUMMARY
-------------------
-Most Active Day: {helper.week_activity_map(selected_user, df).idxmax() if not helper.week_activity_map(selected_user, df).empty else 'N/A'}
-Most Active Month: {helper.month_activity_map(selected_user, df).idxmax() if not helper.month_activity_map(selected_user, df).empty else 'N/A'}
-
 """
     return export_text
-
-def get_conversation_summary(df, selected_user):
-    """Generate AI-like conversation summary"""
-    if selected_user != 'Overall':
-        df = df[df['user'] == selected_user]
-    
-    total_msgs = len(df)
-    unique_days = df['only_date'].nunique()
-    avg_per_day = total_msgs / unique_days if unique_days > 0 else 0
-    
-    # Get top users
-    top_users = df['user'].value_counts().head(3)
-    
-    # Get common topics (simplified)
-    all_text = ' '.join(df[~df['message'].str.contains('<Media omitted>')]['message'].astype(str))
-    words = all_text.lower().split()
-    word_freq = Counter(words).most_common(5)
-    
-    summary = f"""
-    ### 📋 Conversation Summary
-    
-    - **Total Messages**: {total_msgs:,} messages over {unique_days} days
-    - **Average Activity**: {avg_per_day:.1f} messages per day
-    - **Most Active Users**: {', '.join([f"{user} ({count} msgs)" for user, count in top_users.items()])}
-    - **Common Topics**: {', '.join([word for word, _ in word_freq if len(word) > 3][:5])}
-    """
-    return summary
-
-# NEW FEATURE: Response Time Analysis
-def analyze_response_times(df):
-    """Analyze average response times between users"""
-    df_sorted = df.sort_values('date')
-    df_sorted['next_user'] = df_sorted['user'].shift(-1)
-    df_sorted['time_diff'] = df_sorted['date'].shift(-1) - df_sorted['date']
-    
-    # Filter for reasonable response times (less than 1 hour)
-    responses = df_sorted[
-        (df_sorted['user'] != df_sorted['next_user']) & 
-        (df_sorted['time_diff'] < pd.Timedelta(hours=1))
-    ]
-    
-    if len(responses) > 0:
-        avg_response = responses['time_diff'].mean()
-        return avg_response
-    return None
-
-# NEW FEATURE: Message Length Analysis
-def analyze_message_lengths(df, selected_user):
-    """Analyze message length patterns"""
-    if selected_user != 'Overall':
-        df = df[df['user'] == selected_user]
-    
-    df['message_length'] = df['message'].str.len()
-    df['word_count'] = df['message'].str.split().str.len()
-    
-    return df[['message_length', 'word_count']].describe()
-
-# NEW FEATURE: Active Hours Heatmap (Hour vs Day)
-def create_detailed_heatmap(df, selected_user):
-    """Create hour vs day heatmap"""
-    if selected_user != 'Overall':
-        df = df[df['user'] == selected_user]
-    
-    # Create pivot table
-    heatmap_data = df.pivot_table(
-        index='day_name',
-        columns='hour',
-        values='message',
-        aggfunc='count',
-        fill_value=0
-    )
-    
-    # Ensure all hours are present
-    for hour in range(24):
-        if hour not in heatmap_data.columns:
-            heatmap_data[hour] = 0
-    
-    heatmap_data = heatmap_data[sorted(heatmap_data.columns)]
-    
-    # Reorder days
-    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    heatmap_data = heatmap_data.reindex(day_order)
-    
-    return heatmap_data
-
-# NEW FEATURE: Conversation Starter Analysis
-def analyze_conversation_starters(df):
-    """Identify who starts conversations most often"""
-    df = df.sort_values('date')
-    df['new_conversation'] = (
-        (df['user'] != df['user'].shift(1)) & 
-        (df['date'] - df['date'].shift(1) > pd.Timedelta(hours=12))
-    )
-    
-    starters = df[df['new_conversation']]['user'].value_counts()
-    return starters
-
-# NEW FEATURE: Sentiment Analysis (Simplified)
-def simple_sentiment_analysis(df, selected_user):
-    """Simple sentiment analysis based on keywords"""
-    if selected_user != 'Overall':
-        df = df[df['user'] == selected_user]
-    
-    positive_words = ['good', 'great', 'awesome', 'excellent', 'happy', 'thanks', 'thank', 'perfect', 'love', 'best']
-    negative_words = ['bad', 'worst', 'terrible', 'awful', 'sad', 'sorry', 'problem', 'issue', 'difficult', 'hate']
-    
-    sentiments = []
-    for msg in df['message']:
-        msg_lower = msg.lower()
-        pos_count = sum(1 for word in positive_words if word in msg_lower)
-        neg_count = sum(1 for word in negative_words if word in msg_lower)
-        
-        if pos_count > neg_count:
-            sentiments.append('Positive')
-        elif neg_count > pos_count:
-            sentiments.append('Negative')
-        else:
-            sentiments.append('Neutral')
-    
-    df['sentiment'] = sentiments
-    return df['sentiment'].value_counts()
 
 # Main content
 st.markdown('<h1 class="main-header">💬 WhatsApp Chat Analyzer Pro</h1>', unsafe_allow_html=True)
@@ -399,25 +210,11 @@ if uploaded_file or uploaded_zip:
         
         # Get unique users
         users = df["user"].unique().tolist()
-        if "group_notification" in users and not show_system:
+        if "group_notification" in users:
             users.remove("group_notification")
         
         users.sort()
         users.insert(0, "Overall")
-        
-        # Date range filter
-        if date_range and not df.empty:
-            min_date = df['date'].min().date()
-            max_date = df['date'].max().date()
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                start_date = st.date_input("Start Date", min_date, min_value=min_date, max_value=max_date)
-            with col2:
-                end_date = st.date_input("End Date", max_date, min_value=min_date, max_value=max_date)
-            
-            # Filter dataframe
-            df = df[(df['date'].dt.date >= start_date) & (df['date'].dt.date <= end_date)]
         
         # User selection
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -484,33 +281,11 @@ if uploaded_file or uploaded_zip:
                 </div>
                 """, unsafe_allow_html=True)
             
-            progress_bar.progress(20)
-            
-            # NEW: Conversation Summary
-            st.markdown("## 📋 Conversation Summary")
-            summary = get_conversation_summary(df, selected_user)
-            st.markdown(summary)
-            
-            progress_bar.progress(25)
-            
-            # NEW: Sentiment Analysis
-            st.markdown("## 😊 Sentiment Analysis")
-            sentiment_counts = simple_sentiment_analysis(df, selected_user)
-            
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.dataframe(sentiment_counts.reset_index().rename(columns={'index': 'Sentiment', 'sentiment': 'Count'}))
-            with col2:
-                fig = px.pie(values=sentiment_counts.values, names=sentiment_counts.index,
-                            title='Message Sentiment Distribution',
-                            color_discrete_map={'Positive': '#4CAF50', 'Neutral': '#FFC107', 'Negative': '#F44336'})
-                st.plotly_chart(fig, use_container_width=True)
-            
             progress_bar.progress(30)
             
             # Timeline Analysis
             st.markdown("## 📈 Timeline Analysis")
-            tab1, tab2, tab3, tab4 = st.tabs(["📅 Monthly", "📆 Daily", "⏰ Hourly", "🔥 Detailed Heatmap"])
+            tab1, tab2, tab3 = st.tabs(["📅 Monthly Timeline", "📆 Daily Timeline", "⏰ Hourly Activity"])
             
             with tab1:
                 mt = helper.monthly_timelines(selected_user, df)
@@ -569,30 +344,24 @@ if uploaded_file or uploaded_zip:
                         st.info(f"📊 **Peak activity hour**: {int(peak_hour):02d}:00 ({'AM' if peak_hour < 12 else 'PM'})")
                     with col2:
                         st.info(f"📈 **Messages at peak hour**: {int(peak_count):,}")
-            
-            with tab4:
-                st.subheader("🔥 Detailed Activity Heatmap (Hour vs Day)")
-                detailed_heatmap = create_detailed_heatmap(df, selected_user)
-                if not detailed_heatmap.empty:
-                    fig, ax = plt.subplots(figsize=(16, 8))
-                    sns.heatmap(detailed_heatmap, cmap='YlOrRd', annot=True, fmt='g', 
-                               ax=ax, cbar_kws={'label': 'Message Count'}, linewidths=0.5)
-                    plt.title('Message Activity: Hour of Day vs Day of Week', fontsize=16, fontweight='bold', pad=20)
-                    plt.xlabel('Hour of Day (24h format)', fontsize=12)
-                    plt.ylabel('Day of Week', fontsize=12)
-                    st.pyplot(fig)
-                    plt.close()
+                    
+                    # Show top 3 active hours
+                    st.write("**Top 3 Most Active Hours:**")
+                    top_hours = hourly_activity.nlargest(3, 'message_count')[['hour', 'message_count']]
+                    for idx, row in top_hours.iterrows():
+                        hour = int(row['hour'])
+                        st.write(f"• {hour:02d}:00 - {hour:02d}:59 ({'AM' if hour < 12 else 'PM'}): {int(row['message_count']):,} messages")
             
             progress_bar.progress(50)
             
-            # Activity Heatmap (Original)
-            st.markdown("## 🔥 Weekly Activity Pattern")
+            # Activity Heatmap
+            st.markdown("## 🔥 Activity Heatmap")
             user_heatmap = helper.activity_heatmap(selected_user, df)
             if user_heatmap is not None and not user_heatmap.empty:
                 fig, ax = plt.subplots(figsize=(14, 6))
                 sns.heatmap(user_heatmap, cmap='YlOrRd', annot=True, fmt='g', ax=ax, 
                            cbar_kws={'label': 'Message Count'}, linewidths=0.5)
-                plt.title('Weekly Activity Pattern by Time Period', fontsize=16, fontweight='bold', pad=20)
+                plt.title('Weekly Activity Pattern', fontsize=16, fontweight='bold', pad=20)
                 plt.ylabel('Day of Week', fontsize=12)
                 plt.xlabel('Time Period', fontsize=12)
                 plt.xticks(rotation=45, ha='right')
@@ -600,7 +369,7 @@ if uploaded_file or uploaded_zip:
                 st.pyplot(fig)
                 plt.close()
             
-            progress_bar.progress(60)
+            progress_bar.progress(70)
             
             # User Activity Analysis
             if selected_user == 'Overall':
@@ -624,50 +393,8 @@ if uploaded_file or uploaded_zip:
                         use_container_width=True,
                         height=400
                     )
-                
-                # NEW: Conversation Starters
-                st.markdown("### 🗣️ Conversation Starters")
-                starters = analyze_conversation_starters(df)
-                if not starters.empty:
-                    fig = px.bar(x=starters.values, y=starters.index, orientation='h',
-                                title='Who Starts Conversations Most Often',
-                                labels={'x': 'Number of Conversations Started', 'y': 'User'})
-                    st.plotly_chart(fig, use_container_width=True)
             
-            progress_bar.progress(70)
-            
-            # NEW: Message Length Analysis
-            st.markdown("## 📏 Message Length Analysis")
-            length_stats = analyze_message_lengths(df, selected_user)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Message Character Length")
-                st.dataframe(length_stats[['message_length']].round(1))
-            with col2:
-                st.subheader("Word Count per Message")
-                st.dataframe(length_stats[['word_count']].round(1))
-            
-            progress_bar.progress(75)
-            
-            # NEW: Response Time Analysis
-            st.markdown("## ⏱️ Response Time Analysis")
-            avg_response = analyze_response_times(df)
-            if avg_response:
-                minutes = avg_response.total_seconds() / 60
-                st.info(f"⏱️ **Average response time**: {minutes:.1f} minutes")
-                
-                # Quick response rate
-                quick_responses = df[
-                    (df['user'] != df['user'].shift(-1)) & 
-                    (df['date'].shift(-1) - df['date'] < pd.Timedelta(minutes=5))
-                ].shape[0]
-                
-                st.info(f"⚡ **Quick responses (<5 min)**: {quick_responses} messages")
-            else:
-                st.info("Not enough data for response time analysis")
-            
-            progress_bar.progress(80)
+            progress_bar.progress(85)
             
             # Text Analysis
             st.markdown("## 📝 Text Analysis")
@@ -689,7 +416,7 @@ if uploaded_file or uploaded_zip:
                 if most_common_df is not None and not most_common_df.empty:
                     fig = px.bar(most_common_df.head(15), x='Frequency', y='Word',
                                orientation='h',
-                               title=f'Top 15 Common Words (min {min_word_length} chars)',
+                               title='Top 15 Common Words',
                                labels={'Word': 'Words', 'Frequency': 'Frequency'},
                                color='Frequency',
                                color_continuous_scale='viridis')
@@ -701,7 +428,7 @@ if uploaded_file or uploaded_zip:
                     )
                     st.plotly_chart(fig, use_container_width=True)
             
-            progress_bar.progress(90)
+            progress_bar.progress(95)
             
             # Emoji Analysis
             st.markdown("## 😊 Emoji Analysis")
@@ -746,35 +473,12 @@ if uploaded_file or uploaded_zip:
                     )
                     st.plotly_chart(fig, use_container_width=True)
             
-            progress_bar.progress(95)
-            
-            # NEW: Activity Insights
-            st.markdown("## 💡 Key Insights")
-            
-            # Calculate various insights
-            total_days = df['only_date'].nunique()
-            msgs_per_day = num / total_days if total_days > 0 else 0
-            media_percent = (media / num * 100) if num > 0 else 0
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Avg Messages per Day", f"{msgs_per_day:.1f}")
-            with col2:
-                st.metric("Media Percentage", f"{media_percent:.1f}%")
-            with col3:
-                st.metric("Unique Days Active", total_days)
-            
-            # Most active period
-            if 'period' in df.columns:
-                top_period = df['period'].value_counts().idxmax()
-                st.info(f"🌟 **Most active time period**: {top_period}")
-            
             progress_bar.progress(100)
             status_text.text("✅ Analysis Complete!")
             progress_bar.empty()
             status_text.empty()
             
-            # Download section
+            # Add download section
             st.markdown("## 📥 Download Results")
             col1, col2 = st.columns(2)
             with col1:
@@ -798,15 +502,6 @@ elif not st.session_state.analysis_done:
         st.markdown("""
         ## 🎉 Welcome to WhatsApp Chat Analyzer Pro!
         
-        ### ✨ New Features Added:
-        - 📋 **Conversation Summary** - Quick overview of chat activity
-        - 😊 **Sentiment Analysis** - Positive/Neutral/Negative message classification
-        - 🔥 **Detailed Heatmap** - Hour vs Day activity visualization
-        - ⏱️ **Response Time Analysis** - Average response times between users
-        - 📏 **Message Length Analysis** - Character and word count statistics
-        - 🗣️ **Conversation Starters** - Who initiates conversations most often
-        - 💡 **Key Insights** - Automated takeaways from your data
-        
         ### Features:
         - 📊 **Comprehensive Statistics** - Message counts, word counts, media sharing
         - 📈 **Interactive Timelines** - Monthly, daily, and hourly activity patterns
@@ -819,9 +514,36 @@ elif not st.session_state.analysis_done:
         ### Time Format Support:
         - ✅ **12-hour format** (e.g., 13/03/22, 8:30 PM)
         - ✅ **24-hour format** (e.g., 13/03/22, 20:30)
+        - ✅ Both Android and iPhone exports
         
         ### Getting Started:
-        1. Upload your WhatsApp chat export
-        2. Select a user or view overall analysis
-        3. Click "Analyze" to see insights!
+        1. Export your WhatsApp chat (without media)
+        2. Upload the .txt file or zip multiple chats
+        3. Select a user or view overall analysis
+        4. Click "Analyze" to see insights!
         """)
+        
+        with st.expander("📖 Detailed Instructions"):
+            st.markdown("""
+            ### Step-by-Step Guide
+            
+            **Android (12-hour format):**
+            1. Open the WhatsApp chat you want to analyze
+            2. Tap on the three dots in the top right
+            3. Select "More" → "Export Chat"
+            4. Choose "Without Media"
+            5. Save the .txt file to your device
+            
+            **iPhone (24-hour format):**
+            1. Open the WhatsApp chat
+            2. Tap on the contact name or group subject
+            3. Scroll down and tap "Export Chat"
+            4. Choose "Without Media"
+            5. Save the .txt file
+            
+            **Tips:**
+            - For group chats, all participants will be analyzed
+            - You can upload multiple chats in a zip file for combined analysis
+            - Media files are not included to keep the analysis lightweight
+            - Both 12-hour and 24-hour time formats are automatically detected
+            """)
