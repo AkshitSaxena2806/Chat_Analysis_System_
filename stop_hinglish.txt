@@ -113,7 +113,15 @@ maam
 ma'am
 sir
 miss
-mr
 mrs
+mr
 dr
 prof
+hello
+hi
+hey
+ok
+okay
+thanks
+thank
+please
