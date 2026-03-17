@@ -1,26 +1,25 @@
 import re
 import pandas as pd
-from datetime import datetime
 
 def preprocess(data):
     """
-    Preprocess WhatsApp chat data - supports multiple formats
+    Preprocess WhatsApp chat data supporting both 12-hour and 24-hour time formats
     """
     
-    # Try multiple patterns
+    # Try multiple date-time patterns
     patterns = [
-        # 24-hour format: 14/07/25, 12:30 - 
-        r'\d{1,2}/\d{1,2}/\d{2},\s\d{1,2}:\d{2}\s-\s',
-        # 12-hour format: 14/07/25, 12:30 PM - 
-        r'\d{1,2}/\d{1,2}/\d{2},\s\d{1,2}:\d{2}\s[APap][Mm]\s-\s',
-        # With 4-digit year: 14/07/2025, 12:30 - 
-        r'\d{1,2}/\d{1,2}/\d{4},\s\d{1,2}:\d{2}\s-\s',
+        # 12-hour format with AM/PM
+        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}\s[APap][Mm]\s-\s',
+        # 24-hour format
+        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}\s-\s',
+        # Alternative formats
+        r'\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}:\d{2}\]\s',
+        r'\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\s'
     ]
     
     df = None
-    used_pattern = None
     
-    # Try each pattern
+    # Try each pattern until one works
     for pattern in patterns:
         messages = re.split(pattern, data)[1:]
         dates = re.findall(pattern, data)
@@ -30,68 +29,59 @@ def preprocess(data):
                 "user_message": messages,
                 "date": dates
             })
-            used_pattern = pattern
             break
     
+    # If no pattern matched, return empty DataFrame
     if df is None or len(df) == 0:
-        # Try line-by-line parsing as fallback
-        return fallback_preprocess(data)
+        return pd.DataFrame()
     
-    # Clean dates
-    df['date'] = df['date'].str.strip()
-    
-    # Parse dates
-    date_parsed = False
+    # Try to parse dates with different formats
     date_formats = [
-        ('%d/%m/%y, %H:%M - ', False),
-        ('%d/%m/%Y, %H:%M - ', False),
-        ('%d/%m/%y, %I:%M %p - ', True),
-        ('%d/%m/%Y, %I:%M %p - ', True),
+        '%d/%m/%y, %H:%M - ',        # 24-hour: 13/03/22, 20:30 - 
+        '%d/%m/%Y, %H:%M - ',        # 24-hour with 4-digit year
+        '%d/%m/%y, %I:%M %p - ',     # 12-hour: 13/03/22, 8:30 PM - 
+        '%d/%m/%Y, %I:%M %p - ',     # 12-hour with 4-digit year
+        '[%d/%m/%y, %H:%M:%S] ',     # Alternative format with seconds
+        '%Y-%m-%d %H:%M:%S: '        # ISO format
     ]
     
-    for fmt, has_ampm in date_formats:
+    # Try each date format
+    for fmt in date_formats:
         try:
             df["date"] = pd.to_datetime(
                 df["date"],
                 format=fmt,
                 errors="coerce"
             )
+            # If we got valid dates, break
             if df["date"].notna().any():
-                date_parsed = True
                 break
         except:
             continue
     
-    if not date_parsed:
-        df["date"] = pd.to_datetime(df["date"], infer_datetime_format=True, errors="coerce")
+    # If still no valid dates, let pandas infer the format (new recommended approach)
+    if df["date"].isna().all():
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
     
-    # Drop invalid dates
+    # Drop rows with invalid dates
     df = df.dropna(subset=['date'])
     
     if len(df) == 0:
-        return fallback_preprocess(data)
+        return pd.DataFrame()
     
-    # Extract users and messages
+    # Extract user and message
     users = []
     texts = []
     
     for msg in df["user_message"]:
-        # Try to find "user: message" pattern
+        # Pattern for "user: message"
         split = re.split(r"^([^:]+):\s", msg)
         if len(split) > 2:
-            user = split[1].strip()
-            # Clean user name
-            user = re.sub(r'[~ @]', '', user)
-            users.append(user if user else "unknown")
-            texts.append(split[2].strip())
+            users.append(split[1])
+            texts.append(split[2])
         else:
-            # System message
-            msg_lower = msg.lower()
-            if any(word in msg_lower for word in ['added', 'created', 'changed', 'left', 'joined', 'group', 'icon']):
-                users.append("System")
-            else:
-                users.append("System")
-            texts.append(msg.strip())
+            users.append("group_notification")
+            texts.append(msg)
     
     df["user"] = users
     df["message"] = pd.Series(texts).astype(str)
@@ -106,84 +96,20 @@ def preprocess(data):
     df["hour"] = df["date"].dt.hour
     df["minute"] = df["date"].dt.minute
     
-    # Add period
+    # Add period column for heatmap
     def get_period(hour):
-        if hour < 4: return '🌙 Late Night (0-4)'
-        elif hour < 8: return '🌅 Early Morning (4-8)'
-        elif hour < 12: return '☀️ Morning (8-12)'
-        elif hour < 16: return '⛅ Afternoon (12-16)'
-        elif hour < 20: return '🌆 Evening (16-20)'
-        else: return '🌃 Night (20-24)'
-    
-    df['period'] = df['hour'].apply(get_period)
-    
-    return df
-
-def fallback_preprocess(data):
-    """Fallback preprocessing - line by line parsing"""
-    lines = data.strip().split('\n')
-    
-    dates = []
-    users = []
-    messages = []
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Try to find date pattern
-        date_match = re.match(r'^(\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?:\s[APap][Mm])?)\s-\s(.*)$', line)
-        if date_match:
-            date_str = date_match.group(1)
-            content = date_match.group(2)
-            
-            # Parse date
-            try:
-                if 'PM' in date_str or 'AM' in date_str:
-                    date = pd.to_datetime(date_str, format='%d/%m/%y, %I:%M %p', errors='coerce')
-                else:
-                    date = pd.to_datetime(date_str, format='%d/%m/%y, %H:%M', errors='coerce')
-                
-                if pd.notna(date):
-                    # Extract user if exists
-                    if ': ' in content:
-                        user, msg = content.split(': ', 1)
-                        users.append(user.strip())
-                        messages.append(msg.strip())
-                    else:
-                        users.append("System")
-                        messages.append(content)
-                    dates.append(date)
-            except:
-                continue
-    
-    if len(dates) == 0:
-        return pd.DataFrame()
-    
-    df = pd.DataFrame({
-        'date': dates,
-        'user': users,
-        'message': messages
-    })
-    
-    # Add time columns
-    df["year"] = df["date"].dt.year
-    df["month"] = df["date"].dt.month_name()
-    df["month_num"] = df["date"].dt.month
-    df["only_date"] = df["date"].dt.date
-    df["day_name"] = df["date"].dt.day_name()
-    df["hour"] = df["date"].dt.hour
-    df["minute"] = df["date"].dt.minute
-    
-    # Add period
-    def get_period(hour):
-        if hour < 4: return '🌙 Late Night (0-4)'
-        elif hour < 8: return '🌅 Early Morning (4-8)'
-        elif hour < 12: return '☀️ Morning (8-12)'
-        elif hour < 16: return '⛅ Afternoon (12-16)'
-        elif hour < 20: return '🌆 Evening (16-20)'
-        else: return '🌃 Night (20-24)'
+        if hour >= 0 and hour < 4:
+            return 'Late Night (0-4)'
+        elif hour >= 4 and hour < 8:
+            return 'Early Morning (4-8)'
+        elif hour >= 8 and hour < 12:
+            return 'Morning (8-12)'
+        elif hour >= 12 and hour < 16:
+            return 'Afternoon (12-16)'
+        elif hour >= 16 and hour < 20:
+            return 'Evening (16-20)'
+        else:
+            return 'Night (20-24)'
     
     df['period'] = df['hour'].apply(get_period)
     
