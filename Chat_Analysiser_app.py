@@ -447,8 +447,20 @@ if uploaded_file:
                         st.pyplot(fig)
                         plt.close()
                     else:
-                        if getattr(helper, "WORDCLOUD_AVAILABLE", True) is False:
-                            st.error("WordCloud isn't installed on this deployment (install `wordcloud` + system libs).")
+                        # Fallback: if wordcloud lib isn't available, show a treemap "cloud"
+                        fallback_words = helper.most_common_words(selected_user, df)
+                        if fallback_words is not None and not fallback_words.empty:
+                            top = fallback_words.head(50).copy()
+                            fig = px.treemap(
+                                top,
+                                path=["Word"],
+                                values="Frequency",
+                                title="Word Cloud (Fallback)",
+                                color="Frequency",
+                                color_continuous_scale="Greens",
+                            )
+                            fig.update_layout(height=420, margin=dict(t=50, l=10, r=10, b=10))
+                            st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.info("Not enough text data for word cloud")
                 
@@ -663,6 +675,91 @@ if uploaded_file:
                         st.plotly_chart(fig, use_container_width=True)
                     else:
                         st.info("Not enough conversation flow data")
+
+                # 11. Linguistic Error Detection
+                progress_bar.progress(98)
+                status_text.text("🔍 Detecting linguistic errors...")
+                st.markdown("## 🔍 Linguistic Error Analysis")
+                
+                try:
+                    error_df = helper.detect_linguistic_errors(selected_user, df)
+                    
+                    if not error_df.empty:
+                        # Metrics
+                        col1, col2, col3, col4 = st.columns(4)
+                        total_errors = error_df['Total Errors'].sum()
+                        grammar_err = error_df['Grammar'].sum() + error_df['Tense'].sum() + error_df['Agreement'].sum()
+                        typos = error_df['Typo'].sum()
+                        avg_errors = total_errors / len(error_df) if len(error_df) > 0 else 0
+                        
+                        with col1:
+                            st.markdown(f'<div class="metric-container"><div class="metric-value">{total_errors}</div><div class="metric-label">Total Errors</div></div>', unsafe_allow_html=True)
+                        with col2:
+                            st.markdown(f'<div class="metric-container"><div class="metric-value">{grammar_err}</div><div class="metric-label">Grammar Issues</div></div>', unsafe_allow_html=True)
+                        with col3:
+                            st.markdown(f'<div class="metric-container"><div class="metric-value">{typos}</div><div class="metric-label">Typos/Spelling</div></div>', unsafe_allow_html=True)
+                        with col4:
+                            st.markdown(f'<div class="metric-container"><div class="metric-value">{avg_errors:.2f}</div><div class="metric-label">Errors/Message</div></div>', unsafe_allow_html=True)
+                            
+                        st.markdown("### 📝 Highlighted Messages")
+                        st.info("Hover over the highlighted text to see the error details.")
+                        
+                        # Display highlighted text
+                        messages_with_errors = error_df[error_df['Total Errors'] > 0]
+                        if not messages_with_errors.empty:
+                            for _, row in messages_with_errors.head(20).iterrows(): # Show top 20
+                                st.markdown(f"**{row['User']}** ({row['Date']}): {row['Highlighted Text']}", unsafe_allow_html=True)
+                            if len(messages_with_errors) > 20:
+                                st.caption(f"Showing first 20 out of {len(messages_with_errors)} messages with errors.")
+                        else:
+                            st.success("No linguistic errors found in these messages!")
+                            
+                        # 12. Error Tagging & Annotation Tool
+                        st.markdown("---")
+                        st.markdown("## 🏷️ Error Tagging & Annotation Tool")
+                        st.markdown("Manually tag messages for your linguistic study. The table below is interactive.")
+                        
+                        # Prepare tagging dataframe
+                        tagging_df = error_df[['Date', 'User', 'Original Text']].copy()
+                        tagging_df['Error Type'] = "None"
+                        tagging_df['Notes'] = ""
+                        
+                        categories = ["None", "Grammar", "Vocabulary", "Code-mixing", "Pragmatic error", "Spelling", "Other"]
+                        
+                        edited_df = st.data_editor(
+                            tagging_df,
+                            column_config={
+                                "Error Type": st.column_config.SelectboxColumn(
+                                    "Error Type",
+                                    help="Select the category of the linguistic error",
+                                    width="medium",
+                                    options=categories,
+                                ),
+                                "Notes": st.column_config.TextColumn(
+                                    "Notes",
+                                    help="Add manual notes or corrections",
+                                    width="large",
+                                ),
+                            },
+                            hide_index=True,
+                            use_container_width=True,
+                            num_rows="dynamic"
+                        )
+                        
+                        # Download button for annotated data
+                        csv_annotated = edited_df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📋 Download Annotated Dataset (CSV)",
+                            data=csv_annotated,
+                            file_name=f"annotated_chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                        
+                    else:
+                        st.warning("LanguageTool is not available or failed to initialize. Please check requirements.")
+                except Exception as e:
+                    st.error(f"Error during linguistic analysis: {e}")
 
                 # Final progress update
                 progress_bar.progress(100)
