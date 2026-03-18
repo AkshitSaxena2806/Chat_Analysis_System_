@@ -15,12 +15,12 @@ except Exception:
 
 try:
     import language_tool_python
-    # Initialize English LanguageTool
-    lang_tool = language_tool_python.LanguageTool('en-US')
     LANG_TOOL_AVAILABLE = True
-except Exception:
-    lang_tool = None
+except ImportError:
     LANG_TOOL_AVAILABLE = False
+
+# Initialize globally to None so we do it lazily
+lang_tool = None
 
 extractor = URLExtract()
 
@@ -295,7 +295,21 @@ def detect_linguistic_errors(selected_user, df):
     Detects linguistic errors in messages using language_tool_python.
     Returns a DataFrame containing messages and their error metrics.
     """
-    if not LANG_TOOL_AVAILABLE or lang_tool is None:
+    global lang_tool
+    import streamlit as st
+    
+    if not LANG_TOOL_AVAILABLE:
+        return pd.DataFrame()
+        
+    if lang_tool is None:
+        try:
+            with st.spinner("Downloading/Loading LanguageTool (~250MB)... This happens only once and may take a few minutes!"):
+                lang_tool = language_tool_python.LanguageTool('en-US')
+        except Exception as e:
+            st.error(f"Failed to load LanguageTool. Ensure Java is installed. Error: {e}")
+            return pd.DataFrame()
+
+    if lang_tool is None:
         return pd.DataFrame()
 
     if selected_user != 'Overall':
