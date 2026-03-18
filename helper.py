@@ -13,6 +13,15 @@ except Exception:
     WordCloud = None
     WORDCLOUD_AVAILABLE = False
 
+try:
+    import language_tool_python
+    # Initialize English LanguageTool
+    lang_tool = language_tool_python.LanguageTool('en-US')
+    LANG_TOOL_AVAILABLE = True
+except Exception:
+    lang_tool = None
+    LANG_TOOL_AVAILABLE = False
+
 extractor = URLExtract()
 
 # Common stop words (English + basic Hindi) - loaded from file
@@ -280,3 +289,88 @@ def add_time_columns(df):
         df['period'] = df['hour'].apply(get_period)
     
     return df
+
+def detect_linguistic_errors(selected_user, df):
+    """
+    Detects linguistic errors in messages using language_tool_python.
+    Returns a DataFrame containing messages and their error metrics.
+    """
+    if not LANG_TOOL_AVAILABLE or lang_tool is None:
+        return pd.DataFrame()
+
+    if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+
+    # Filter out system messages and media omitted
+    temp = df[~df['user'].str.contains('System|group_notification', na=False, regex=True)].copy()
+    temp = temp[~temp['message'].str.contains('<Media omitted>', na=False, regex=False)]
+    
+    results = []
+    
+    for idx, row in temp.iterrows():
+        msg = str(row['message'])
+        
+        # skip if just URL, empty, or very short
+        if not msg.strip() or msg.startswith('http') or len(msg.strip()) < 3:
+            continue
+            
+        # remove emojis before checking to avoid offset issues
+        clean_msg = ''.join([c for c in msg if c not in emoji.EMOJI_DATA])
+        
+        try:
+            matches = lang_tool.check(clean_msg)
+        except Exception:
+            # Skip on tool failure
+            continue
+            
+        if len(matches) > 0:
+            grammar = typo = tense = agreement = other = 0
+            
+            # Highlight HTML
+            html_msg = clean_msg
+            offset_shift = 0
+            
+            # Sort matches by offset to apply HTML tags correctly
+            sorted_matches = sorted(matches, key=lambda x: x.offset)
+            
+            for match in sorted_matches:
+                # categorize
+                cat = match.category.lower() if match.category else ""
+                ruleId = match.ruleId.lower() if match.ruleId else ""
+                
+                if 'grammar' in cat:
+                    if 'tense' in ruleId: tense += 1
+                    elif 'agreement' in ruleId: agreement += 1
+                    else: grammar += 1
+                elif 'typo' in cat or 'misspelling' in cat or 'casing' in cat or 'typographical' in cat:
+                    typo += 1
+                else:
+                    other += 1
+                    
+                # highlight logic
+                start = match.offset + offset_shift
+                end = start + match.errorLength
+                
+                # tooltip message
+                tooltip = match.message.replace('"', '&quot;').replace("'", "&#39;")
+                
+                # We use a custom style for marking
+                mark_html = f'<mark title="{tooltip}" style="background-color: #ffcccc; padding: 0 2px; border-radius: 3px; border-bottom: 2px solid red; cursor: help;">{html_msg[start:end]}</mark>'
+                
+                html_msg = html_msg[:start] + mark_html + html_msg[end:]
+                offset_shift += len(mark_html) - match.errorLength
+                
+            results.append({
+                'Date': row['date'],
+                'User': row['user'],
+                'Original Text': msg,
+                'Total Errors': len(matches),
+                'Grammar': grammar,
+                'Typo': typo,
+                'Tense': tense,
+                'Agreement': agreement,
+                'Other': other,
+                'Highlighted Text': html_msg
+            })
+            
+    return pd.DataFrame(results)
