@@ -805,43 +805,20 @@ if uploaded_file:
                             st.bar_chart(error_counts)
                         
                     else:
-                        # Check if LanguageTool is available
-                        import subprocess
-                        import shutil
-                        
-                        def is_java_installed():
-                            java_exec = shutil.which('java')
-                            if java_exec:
-                                try:
-                                    result = subprocess.run(['java', '-version'], 
-                                                          capture_output=True, 
-                                                          text=True, 
-                                                          timeout=5)
-                                    return result.returncode == 0
-                                except:
-                                    return False
-                            return False
-                        
-                        if not is_java_installed():
-                            st.info(
-                                "**ℹ️ Linguistic Analysis Requires Java**\n\n"
-                                "This feature needs Java to detect grammar errors.\n\n"
-                                "**Quick Setup (2 minutes):**\n"
-                                "1. Download Java: https://www.java.com/download/\n"
-                                "2. Install and restart computer\n"
-                                "3. Run this app again\n\n"
-                                "*All other analysis features work without Java!*"
-                            )
-                        else:
-                            st.info(
-                                "**📊 No Errors Detected**\n\n"
-                                "Your chat messages look grammatically correct!\n\n"
-                                "Possible reasons:\n"
-                                "- Messages are well-written ✓\n"
-                                "- Chat is very short (try larger dataset)\n"
-                                "- Informal language/slang not flagged\n"
-                                "- Code-mixed content (Hinglish) may need manual review"
-                            )
+                        # LanguageTool requires Java which isn't available on most hosting platforms
+                        st.info(
+                            "**ℹ️ Linguistic Analysis Unavailable on This Server**\n\n"
+                            "This feature requires Java installation, which isn't supported on hosted Streamlit servers.\n\n"
+                            "**To use this feature:**\n"
+                            "- Run the app locally on your computer with Java installed\n"
+                            "- Or deploy to a platform that supports Java (Heroku, AWS, etc.)\n\n"
+                            "*All other analysis features work perfectly here!* ✓\n\n"
+                            "**Quick Local Setup:**\n"
+                            "1. Install Java from java.com\n"
+                            "2. Clone/download this project\n"
+                            "3. Run: `streamlit run Chat_Analysiser_app.py`\n"
+                            "4. Linguistic analysis will work!"
+                        )
                 except Exception as e:
                     # Log error but don't show to user
                     logger.error(f"Linguistic analysis failed: {e}")
