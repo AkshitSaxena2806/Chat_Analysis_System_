@@ -10,6 +10,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import emoji
 
+# Reuse helper's configured logger (prevents NameError in exception handling)
+logger = helper.logger
+
 # Page configuration
 st.set_page_config(
     page_title="WhatsApp Chat Analyzer", 
@@ -318,8 +321,17 @@ if uploaded_file:
                 progress_bar.progress(20)
                 status_text.text("💡 Generating insights...")
                 
-                week_map = helper.week_activity_map(selected_user, df)
-                month_map = helper.month_activity_map(selected_user, df)
+                # Always define these so downstream charts never crash.
+                week_map = pd.Series(dtype=int)
+                month_map = pd.Series(dtype=int)
+                try:
+                    week_map = helper.week_activity_map(selected_user, df)
+                except Exception:
+                    week_map = pd.Series(dtype=int)
+                try:
+                    month_map = helper.month_activity_map(selected_user, df)
+                except Exception:
+                    month_map = pd.Series(dtype=int)
                 
                 most_day = week_map.idxmax() if not week_map.empty else 'N/A'
                 most_month = month_map.idxmax() if not month_map.empty else 'N/A'
@@ -467,7 +479,7 @@ if uploaded_file:
                 with col1:
                     st.subheader("☁️ Word Cloud")
                     wc = helper.workcloud(selected_user, df)
-                    if wc:
+                    if wc is not None:
                         fig, ax = plt.subplots(figsize=(12, 6))
                         ax.imshow(wc, interpolation='bilinear')
                         ax.axis('off')
@@ -551,8 +563,16 @@ if uploaded_file:
                 st.markdown("## 🎯 Additional Insights")
 
                 # Ensure these exist even if earlier sections changed
-                week_map = helper.week_activity_map(selected_user, df)
-                month_map = helper.month_activity_map(selected_user, df)
+                week_map = pd.Series(dtype=int)
+                month_map = pd.Series(dtype=int)
+                try:
+                    week_map = helper.week_activity_map(selected_user, df)
+                except Exception:
+                    week_map = pd.Series(dtype=int)
+                try:
+                    month_map = helper.month_activity_map(selected_user, df)
+                except Exception:
+                    month_map = pd.Series(dtype=int)
                 
                 col1, col2 = st.columns(2)
                 
@@ -805,20 +825,24 @@ if uploaded_file:
                             st.bar_chart(error_counts)
                         
                     else:
-                        # LanguageTool requires Java which isn't available on most hosting platforms
-                        st.info(
-                            "**ℹ️ Linguistic Analysis Unavailable on This Server**\n\n"
-                            "This feature requires Java installation, which isn't supported on hosted Streamlit servers.\n\n"
-                            "**To use this feature:**\n"
-                            "- Run the app locally on your computer with Java installed\n"
-                            "- Or deploy to a platform that supports Java (Heroku, AWS, etc.)\n\n"
-                            "*All other analysis features work perfectly here!* ✓\n\n"
-                            "**Quick Local Setup:**\n"
-                            "1. Install Java from java.com\n"
-                            "2. Clone/download this project\n"
-                            "3. Run: `streamlit run Chat_Analysiser_app.py`\n"
-                            "4. Linguistic analysis will work!"
-                        )
+                        detection_mode = getattr(helper, "LINGUISTIC_DETECTION_MODE", None)
+                        if detection_mode == "heuristic":
+                            # Heuristic fallback is always available (no Java dependency),
+                            # so "empty" here means: no issues detected by the rules.
+                            st.info(
+                                "No linguistic errors found using heuristic detection in this chat.\n\n"
+                                "For more accurate results (Java + LanguageTool), install Java and run the app locally."
+                            )
+                        else:
+                            # LanguageTool requires Java which isn't available on most hosting platforms
+                            st.info(
+                                "**ℹ️ Linguistic Analysis Unavailable on This Server**\n\n"
+                                "This feature requires Java installation, which isn't supported on hosted Streamlit servers.\n\n"
+                                "**To use this feature:**\n"
+                                "- Run the app locally on your computer with Java installed\n"
+                                "- Or deploy to a platform that supports Java (Heroku, AWS, etc.)\n\n"
+                                "*All other analysis features work perfectly here!* ✓"
+                            )
                 except Exception as e:
                     # Log error but don't show to user
                     logger.error(f"Linguistic analysis failed: {e}")
