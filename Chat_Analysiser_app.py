@@ -830,17 +830,6 @@ if uploaded_file:
                             use_container_width=True
                         )
                         
-                        # Export summary statistics
-                        st.markdown("### 📊 Annotation Summary")
-                        annotated = edited_df.copy()
-                        annotated['Error Type'] = annotated['Error Type'].fillna('None')
-                        non_none = annotated[annotated['Error Type'] != 'None']
-                        if len(non_none) > 0:
-                            error_counts = non_none['Error Type'].value_counts()
-                            st.bar_chart(error_counts)
-                        else:
-                            st.info("No annotations selected yet. Change `Error Type` in the table to see summary.")
-                        
                     else:
                         detection_mode = getattr(helper, "LINGUISTIC_DETECTION_MODE", None)
                         if detection_mode == "heuristic":
