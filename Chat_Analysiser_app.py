@@ -782,14 +782,25 @@ if uploaded_file:
                         st.info("💡 **Tag categories:** Grammar, Vocabulary, Code-mixing, Pragmatic error, Spelling, Other")
                         
                         # Prepare tagging dataframe
-                        tagging_df = error_df[['Date', 'User', 'Original Text']].copy()
+                        # Pre-fill Error Type from auto-detected issues so
+                        # Annotation Summary isn't empty before manual edits.
+                        tagging_df = error_df[['Date', 'User', 'Original Text', 'Tense', 'Agreement', 'Article', 'Fragment', 'Typo', 'Grammar', 'Other']].copy()
                         tagging_df['Error Type'] = "None"
                         tagging_df['Notes'] = ""
                         
                         categories = ["None", "Grammar", "Vocabulary", "Code-mixing", "Pragmatic error", "Spelling", "Tense", "Agreement", "Article", "Fragment", "Other"]
+
+                        # Priority order for a single default tag per message
+                        tagging_df.loc[tagging_df['Tense'] > 0, 'Error Type'] = 'Tense'
+                        tagging_df.loc[(tagging_df['Error Type'] == 'None') & (tagging_df['Agreement'] > 0), 'Error Type'] = 'Agreement'
+                        tagging_df.loc[(tagging_df['Error Type'] == 'None') & (tagging_df['Article'] > 0), 'Error Type'] = 'Article'
+                        tagging_df.loc[(tagging_df['Error Type'] == 'None') & (tagging_df['Fragment'] > 0), 'Error Type'] = 'Fragment'
+                        tagging_df.loc[(tagging_df['Error Type'] == 'None') & (tagging_df['Typo'] > 0), 'Error Type'] = 'Spelling'
+                        tagging_df.loc[(tagging_df['Error Type'] == 'None') & (tagging_df['Grammar'] > 0), 'Error Type'] = 'Grammar'
+                        tagging_df.loc[(tagging_df['Error Type'] == 'None') & (tagging_df['Other'] > 0), 'Error Type'] = 'Other'
                         
                         edited_df = st.data_editor(
-                            tagging_df,
+                            tagging_df[['Date', 'User', 'Original Text', 'Error Type', 'Notes']],
                             column_config={
                                 "Error Type": st.column_config.SelectboxColumn(
                                     "Error Type",
@@ -805,7 +816,8 @@ if uploaded_file:
                             },
                             hide_index=True,
                             use_container_width=True,
-                            num_rows="dynamic"
+                            num_rows="dynamic",
+                            key=f"error_tagging_{selected_user}"
                         )
                         
                         # Download button for annotated data
@@ -820,9 +832,14 @@ if uploaded_file:
                         
                         # Export summary statistics
                         st.markdown("### 📊 Annotation Summary")
-                        if len(edited_df[edited_df['Error Type'] != 'None']) > 0:
-                            error_counts = edited_df['Error Type'].value_counts()
+                        annotated = edited_df.copy()
+                        annotated['Error Type'] = annotated['Error Type'].fillna('None')
+                        non_none = annotated[annotated['Error Type'] != 'None']
+                        if len(non_none) > 0:
+                            error_counts = non_none['Error Type'].value_counts()
                             st.bar_chart(error_counts)
+                        else:
+                            st.info("No annotations selected yet. Change `Error Type` in the table to see summary.")
                         
                     else:
                         detection_mode = getattr(helper, "LINGUISTIC_DETECTION_MODE", None)
