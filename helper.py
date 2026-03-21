@@ -5,6 +5,11 @@ import emoji
 import numpy as np
 import pandas as pd
 from urlextract import URLExtract
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 try:
     from wordcloud import WordCloud
@@ -12,6 +17,18 @@ try:
 except Exception:
     WordCloud = None
     WORDCLOUD_AVAILABLE = False
+    # Don't print warning here - let the app handle it
+
+import os
+
+# Ensure common Windows Java paths are in PATH so language_tool_python can find it
+java_paths = [
+    r"C:\Program Files\Common Files\Oracle\Java\javapath",
+    r"C:\Program Files (x86)\Common Files\Oracle\Java\java8path"
+]
+for p in java_paths:
+    if os.path.exists(p) and p.lower() not in os.environ.get('PATH', '').lower():
+        os.environ['PATH'] = p + os.pathsep + os.environ.get('PATH', '')
 
 try:
     import language_tool_python
@@ -28,11 +45,24 @@ extractor = URLExtract()
 def load_stop_words():
     """Load stop words from file or use default list"""
     try:
-        with open('stop_hinglish.txt', 'r', encoding='utf-8') as f:
-            return set([word.strip().lower() for word in f.readlines() if word.strip()])
-    except:
-        # Default stop words if file not found
-        return {
+        # Try multiple possible locations
+        possible_paths = [
+            'stop_hinglish.txt',
+            os.path.join(os.path.dirname(__file__), 'stop_hinglish.txt')
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    return set([word.strip().lower() for word in f.readlines() if word.strip()])
+        
+        # If file not found, use default
+        logger.warning("stop_hinglish.txt not found, using default stop words")
+    except Exception as e:
+        logger.warning(f"Error loading stop words: {e}, using defaults")
+    
+    # Default stop words if file not found
+    return {
             'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
             'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during',
             'before', 'after', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
@@ -290,22 +320,37 @@ def add_time_columns(df):
     
     return df
 
-def detect_linguistic_errors(selected_user, df):
+def detect_linguistic_errors(selected_user, df, timeout=30):
     """
     Detects linguistic errors in messages using language_tool_python.
     Returns a DataFrame containing messages and their error metrics.
+    
+    Args:
+        selected_user: User to analyze or 'Overall'
+        df: DataFrame with chat data
+        timeout: Timeout for LanguageTool initialization (seconds)
     """
     global lang_tool
     import streamlit as st
     
     if not LANG_TOOL_AVAILABLE:
+        logger.warning("LanguageTool module not available")
         return pd.DataFrame()
         
     if lang_tool is None:
         try:
             with st.spinner("Downloading/Loading LanguageTool (~250MB)... This happens only once and may take a few minutes!"):
-                lang_tool = language_tool_python.LanguageTool('en-US')
+                # Initialize with timeout and reduced memory options
+                lang_tool = language_tool_python.LanguageTool(
+                    'en-US',
+                    config={
+                        'max_check_thread_count': 4,
+                        'disable_port_offset': False
+                    },
+                    remote_server=None
+                )
         except Exception as e:
+            logger.error(f"Failed to load LanguageTool: {e}")
             st.error(f"Failed to load LanguageTool. Ensure Java is installed. Error: {e}")
             return pd.DataFrame()
 
@@ -320,6 +365,13 @@ def detect_linguistic_errors(selected_user, df):
     temp = temp[~temp['message'].str.contains('<Media omitted>', na=False, regex=False)]
     
     results = []
+    total_messages = len(temp)
+    processed = 0
+    
+    # Show progress for large datasets
+    if total_messages > 100:
+        progress_bar = st.progress(0)
+        status_text = st.empty()
     
     for idx, row in temp.iterrows():
         msg = str(row['message'])
@@ -333,8 +385,8 @@ def detect_linguistic_errors(selected_user, df):
         
         try:
             matches = lang_tool.check(clean_msg)
-        except Exception:
-            # Skip on tool failure
+        except Exception as e:
+            logger.warning(f"Error checking message: {e}")
             continue
             
         if len(matches) > 0:
@@ -386,5 +438,16 @@ def detect_linguistic_errors(selected_user, df):
                 'Other': other,
                 'Highlighted Text': html_msg
             })
+        
+        processed += 1
+        # Update progress bar
+        if total_messages > 100 and processed % 10 == 0:
+            progress_bar.progress(min(processed / total_messages, 1.0))
+            status_text.text(f"Processing message {processed}/{total_messages}...")
+    
+    # Clean up progress indicators
+    if total_messages > 100:
+        progress_bar.empty()
+        status_text.empty()
             
     return pd.DataFrame(results)
