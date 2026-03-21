@@ -340,15 +340,8 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
     if lang_tool is None:
         try:
             with st.spinner("Downloading/Loading LanguageTool (~250MB)... This happens only once and may take a few minutes!"):
-                # Initialize with timeout and reduced memory options
-                lang_tool = language_tool_python.LanguageTool(
-                    'en-US',
-                    config={
-                        'max_check_thread_count': 4,
-                        'disable_port_offset': False
-                    },
-                    remote_server=None
-                )
+                # Initialize LanguageTool without problematic config keys
+                lang_tool = language_tool_python.LanguageTool('en-US')
         except Exception as e:
             logger.error(f"Failed to load LanguageTool: {e}")
             st.error(f"Failed to load LanguageTool. Ensure Java is installed. Error: {e}")
