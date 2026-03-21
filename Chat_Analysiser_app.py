@@ -805,12 +805,47 @@ if uploaded_file:
                             st.bar_chart(error_counts)
                         
                     else:
-                        # LanguageTool not available - skip this section entirely
-                        pass  # Do nothing, just skip linguistic analysis
+                        # Check if LanguageTool is available
+                        import subprocess
+                        import shutil
+                        
+                        def is_java_installed():
+                            java_exec = shutil.which('java')
+                            if java_exec:
+                                try:
+                                    result = subprocess.run(['java', '-version'], 
+                                                          capture_output=True, 
+                                                          text=True, 
+                                                          timeout=5)
+                                    return result.returncode == 0
+                                except:
+                                    return False
+                            return False
+                        
+                        if not is_java_installed():
+                            st.info(
+                                "**ℹ️ Linguistic Analysis Requires Java**\n\n"
+                                "This feature needs Java to detect grammar errors.\n\n"
+                                "**Quick Setup (2 minutes):**\n"
+                                "1. Download Java: https://www.java.com/download/\n"
+                                "2. Install and restart computer\n"
+                                "3. Run this app again\n\n"
+                                "*All other analysis features work without Java!*"
+                            )
+                        else:
+                            st.info(
+                                "**📊 No Errors Detected**\n\n"
+                                "Your chat messages look grammatically correct!\n\n"
+                                "Possible reasons:\n"
+                                "- Messages are well-written ✓\n"
+                                "- Chat is very short (try larger dataset)\n"
+                                "- Informal language/slang not flagged\n"
+                                "- Code-mixed content (Hinglish) may need manual review"
+                            )
                 except Exception as e:
                     # Log error but don't show to user
                     logger.error(f"Linguistic analysis failed: {e}")
-                    pass  # Skip linguistic analysis silently
+                    st.info("**⚠️ Analysis Temporarily Unavailable**\n\nPlease try again or continue with other features.")
 
 
                 # Final progress update
