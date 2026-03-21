@@ -325,6 +325,14 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
     Detects linguistic errors in messages using language_tool_python.
     Returns a DataFrame containing messages and their error metrics.
     
+    Detects:
+    - Tense errors
+    - Subject-verb agreement
+    - Article usage (a, an, the)
+    - Sentence fragments
+    - Spelling/typographical errors
+    - Grammar errors
+    
     Args:
         selected_user: User to analyze or 'Overall'
         df: DataFrame with chat data
@@ -383,7 +391,7 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
             continue
             
         if len(matches) > 0:
-            grammar = typo = tense = agreement = other = 0
+            grammar = typo = tense = agreement = article = fragment = other = 0
             
             # Highlight HTML
             html_msg = clean_msg
@@ -393,16 +401,42 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
             sorted_matches = sorted(matches, key=lambda x: x.offset)
             
             for match in sorted_matches:
-                # categorize
+                # Enhanced categorization based on category and ruleId
                 cat = match.category.lower() if match.category else ""
                 ruleId = match.ruleId.lower() if match.ruleId else ""
+                issue = match.message.lower() if match.message else ""
                 
-                if 'grammar' in cat:
-                    if 'tense' in ruleId: tense += 1
-                    elif 'agreement' in ruleId: agreement += 1
-                    else: grammar += 1
-                elif 'typo' in cat or 'misspelling' in cat or 'casing' in cat or 'typographical' in cat:
+                # Detailed error categorization
+                # 1. Tense errors
+                if any(keyword in ruleId or keyword in cat or keyword in issue for keyword in 
+                       ['tense', 'past form', 'past participle', 'verb form', 'participle']):
+                    tense += 1
+                
+                # 2. Subject-verb agreement
+                elif any(keyword in ruleId or keyword in cat or keyword in issue for keyword in
+                       ['agreement', 'subject-verb', '3rd person', 'singular verb', 'plural verb']):
+                    agreement += 1
+                
+                # 3. Article usage (a, an, the)
+                elif any(keyword in ruleId or keyword in cat or keyword in issue for keyword in
+                       ['article', 'missing article', 'wrong article', 'a/an', 'the ', 'no article']):
+                    article += 1
+                
+                # 4. Sentence fragments / incomplete sentences
+                elif any(keyword in ruleId or keyword in cat or keyword in issue for keyword in
+                       ['fragment', 'incomplete', 'sentence', 'clause', 'run-on']):
+                    fragment += 1
+                
+                # 5. Typo/spelling errors
+                elif any(keyword in ruleId or keyword in cat or keyword in issue for keyword in
+                       ['typo', 'misspelling', 'spelling', 'casing', 'typographical', 'capitalization']):
                     typo += 1
+                
+                # 6. General grammar
+                elif 'grammar' in cat:
+                    grammar += 1
+                
+                # 7. Other errors
                 else:
                     other += 1
                     
@@ -410,11 +444,34 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
                 start = match.offset + offset_shift
                 end = start + match.errorLength
                 
-                # tooltip message
-                tooltip = match.message.replace('"', '&quot;').replace("'", "&#39;")
+                # tooltip message with error type
+                error_type = ""
+                if tense > 0 and 'tense' in ruleId:
+                    error_type = "Tense Error: "
+                elif agreement > 0 and 'agreement' in ruleId:
+                    error_type = "Agreement Error: "
+                elif article > 0 and 'article' in ruleId:
+                    error_type = "Article Error: "
+                elif fragment > 0 and 'fragment' in ruleId:
+                    error_type = "Fragment: "
                 
-                # We use a custom style for marking
-                mark_html = f'<mark title="{tooltip}" style="background-color: #ffcccc; padding: 0 2px; border-radius: 3px; border-bottom: 2px solid red; cursor: help;">{html_msg[start:end]}</mark>'
+                tooltip = f"{error_type}{match.message}".replace('"', '&quot;').replace("'", "&#39;")
+                
+                # We use a custom style for marking with color coding by error type
+                if 'tense' in ruleId:
+                    bg_color = '#ffcccc'  # Red for tense
+                elif 'agreement' in ruleId:
+                    bg_color = '#ffe6cc'  # Orange for agreement
+                elif 'article' in ruleId:
+                    bg_color = '#fff2cc'  # Yellow for article
+                elif 'fragment' in ruleId or 'sentence' in ruleId:
+                    bg_color = '#e6f3ff'  # Blue for fragments
+                elif 'typo' in cat or 'misspelling' in cat:
+                    bg_color = '#f0f0f0'  # Gray for typos
+                else:
+                    bg_color = '#ffcccc'  # Default red
+                
+                mark_html = f'<mark title="{tooltip}" style="background-color: {bg_color}; padding: 0 2px; border-radius: 3px; border-bottom: 2px solid red; cursor: help;">{html_msg[start:end]}</mark>'
                 
                 html_msg = html_msg[:start] + mark_html + html_msg[end:]
                 offset_shift += len(mark_html) - match.errorLength
@@ -428,6 +485,8 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
                 'Typo': typo,
                 'Tense': tense,
                 'Agreement': agreement,
+                'Article': article,
+                'Fragment': fragment,
                 'Other': other,
                 'Highlighted Text': html_msg
             })
