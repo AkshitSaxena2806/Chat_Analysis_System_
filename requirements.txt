@@ -9,3 +9,4 @@ urlextract>=1.9,<2
 pillow>=10,<12
 language-tool-python>=2.7.1
 wordcloud>=1.9,<2
+pyspellchecker>=0.7,<1  # Pure Python spell checker (no Java needed)
