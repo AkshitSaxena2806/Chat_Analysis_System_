@@ -18,11 +18,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Apply theme based on session state
+if 'dark_mode' in st.session_state and st.session_state.dark_mode:
+    # Note: Streamlit's native dark theme is applied via config.toml or user settings
+    # Our custom CSS will handle the visual styling
+    pass
+
+# Custom CSS with Dark Mode Support
 st.markdown("""
 <style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+        --bg-color: #f8f9fa;
+        --card-bg: white;
+        --text-color: #212529;
+        --shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    [data-theme="dark"] {
+        --bg-color: #0e1117;
+        --card-bg: #1a1f2e;
+        --text-color: #fafafa;
+        --shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    
     .main-header {
-        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+        background: var(--primary-gradient);
         padding: 2rem;
         border-radius: 15px;
         color: white;
@@ -41,7 +62,7 @@ st.markdown("""
         margin: 0.5rem 0 0 0;
     }
     .stat-card {
-        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+        background: var(--primary-gradient);
         border-radius: 15px;
         padding: 1.8rem;
         color: white;
@@ -65,24 +86,24 @@ st.markdown("""
         letter-spacing: 1px;
     }
     .feature-card {
-        background: white;
+        background: var(--card-bg);
         border-radius: 15px;
         padding: 1.5rem;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        box-shadow: var(--shadow);
         border-left: 5px solid #25D366;
         margin-bottom: 1rem;
         transition: transform 0.3s ease;
-        color: #212529;
+        color: var(--text-color);
     }
     .feature-card h4 {
-        color: #128C7E;
+        color: #25D366;
         margin-top: 0;
     }
     .feature-card:hover {
         transform: translateX(10px);
     }
     .stButton > button {
-        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+        background: var(--primary-gradient);
         color: white;
         font-weight: bold;
         border: none;
@@ -99,7 +120,7 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 2rem;
-        background-color: #f8f9fa;
+        background-color: var(--bg-color);
         padding: 0.5rem;
         border-radius: 50px;
     }
@@ -109,11 +130,11 @@ st.markdown("""
         font-weight: 600;
     }
     .metric-container {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        background: linear-gradient(135deg, var(--bg-color) 0%, #e9ecef 100%);
         border-radius: 15px;
         padding: 1.5rem;
         text-align: center;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        box-shadow: var(--shadow);
     }
     .metric-value {
         font-size: 2.5rem;
@@ -134,7 +155,7 @@ st.markdown("""
         margin: 1rem 0;
     }
     .stProgress > div > div > div > div {
-        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+        background: var(--primary-gradient);
     }
     .footer {
         text-align: center;
@@ -152,6 +173,8 @@ if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
 if 'selected_user' not in st.session_state:
     st.session_state.selected_user = "Overall"
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
 
 # Sidebar
 with st.sidebar:
@@ -160,6 +183,15 @@ with st.sidebar:
         st.image("https://img.icons8.com/color/96/000000/whatsapp--v1.png", width=80)
     
     st.title("📱 Chat Analysis")
+    st.markdown("---")
+    
+    # Theme Toggle
+    st.markdown("### 🎨 Appearance")
+    dark_mode = st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode)
+    if dark_mode != st.session_state.dark_mode:
+        st.session_state.dark_mode = dark_mode
+        st.rerun()
+    
     st.markdown("---")
     
     st.markdown("### 📤 Upload Chat")
@@ -259,8 +291,7 @@ if uploaded_file:
             col1, col2 = st.columns([3, 1])
             with col1:
                 users = ['Overall'] + [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']]
-                selected_user = st.selectbox("👤 Select User to Analyze", users, index=0,
-                                             format_func=lambda x: f"👥 {x}" if x == "Overall" else f"👤 {x}")
+                selected_user = st.selectbox("👤 Select User to Analyze", users, index=0,format_func=lambda x: f"👥 {x}" if x == "Overall" else f"👤 {x}")
             with col2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 analyze_btn = st.button("🔍 Analyze Now", use_container_width=True)
@@ -279,8 +310,7 @@ if uploaded_file:
 
                 st.markdown("## 📈 Overview Statistics")
                 cols = st.columns(4)
-                for i, (val, label) in enumerate([(num, "Total Messages"), (words, "Total Words"),
-                                                   (media, "Media Shared"), (links, "Links Shared")]):
+                for i, (val, label) in enumerate([(num, "Total Messages"), (words, "Total Words"),(media, "Media Shared"), (links, "Links Shared")]):
                     with cols[i]:
                         st.markdown(f'<div class="stat-card"><div class="stat-number">{val:,}</div><div class="stat-label">{label}</div></div>', unsafe_allow_html=True)
 
@@ -391,8 +421,7 @@ if uploaded_file:
                 heat = helper.activity_heatmap(selected_user, df)
                 if not heat.empty:
                     fig, ax = plt.subplots(figsize=(14, 6))
-                    sns.heatmap(heat, cmap='YlOrRd', annot=True, fmt='g', ax=ax, 
-                               cbar_kws={'label': 'Number of Messages'}, linewidths=0.5)
+                    sns.heatmap(heat, cmap='YlOrRd', annot=True, fmt='g', ax=ax,cbar_kws={'label': 'Number of Messages'}, linewidths=0.5)
                     plt.title('Weekly Activity Pattern', fontsize=14, fontweight='bold', pad=20)
                     plt.ylabel('Day of Week', fontsize=12)
                     plt.xlabel('Time Period', fontsize=12)
@@ -400,10 +429,8 @@ if uploaded_file:
                     plt.tight_layout()
                     st.pyplot(fig)
                     plt.close()
-                else:
-                    st.info("Not enough data for heatmap visualization")
-
-                # 5. User Analysis (Only for Overall)
+                
+                # 5. User Analysis (Only for Overall) - moved outside else block
                 if selected_user == 'Overall':
                     progress_bar.progress(70)
                     status_text.text("👥 Analyzing user activity...")
@@ -468,13 +495,7 @@ if uploaded_file:
                     st.subheader("📊 Most Common Words")
                     common_words = helper.most_common_words(selected_user, df)
                     if not common_words.empty:
-                        fig = px.bar(common_words.head(10), 
-                                   x='Frequency', 
-                                   y='Word', 
-                                   orientation='h', 
-                                   title='Top 10 Most Used Words',
-                                   color='Frequency',
-                                   color_continuous_scale='Greens')
+                        fig = px.bar(common_words.head(10),x='Frequency',y='Word',orientation='h',title='Top 10 Most Used Words',color='Frequency', color_continuous_scale='Greens')
                         fig.update_layout(
                             yaxis={'categoryorder': 'total ascending'},
                             height=500,
@@ -523,6 +544,67 @@ if uploaded_file:
                         st.plotly_chart(fig, use_container_width=True)
                     else:
                         st.info("No emoji data available")
+
+                # 7.5 Interactive Comparison Tool (New Feature)
+                if len(df['user'].unique()) >= 2:
+                    st.markdown("## 🔍 Compare Users")
+                    st.markdown("Select two users to compare their activity patterns")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        user1 = st.selectbox(
+                            "First User",
+                            [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']],
+                            key="user1"
+                        )
+                    with col2:
+                        user2 = st.selectbox(
+                            "Second User",
+                            [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']]
+                            ,key="user2"
+                        )
+                    
+                    if user1 and user2 and user1 != user2:
+                        # Create comparison data
+                        comp_data = {
+                            'Metric': ['Total Messages', 'Total Words', 'Media Shared', 'Links Shared', 'Avg Words/Message'],
+                            user1: [],
+                            user2: []
+                        }
+                        
+                        for user in [user1, user2]:
+                            num, words, media, links = helper.fetch_stats(user, df)
+                            avg_words = words / num if num > 0 else 0
+                            if user == user1:
+                                comp_data[user] = [num, words, media, links, f"{avg_words:.1f}"]
+                            else:
+                                comp_data[user2] = [num, words, media, links, f"{avg_words:.1f}"]
+                        
+                        comp_df = pd.DataFrame(comp_data)
+                        st.dataframe(comp_df, use_container_width=True)
+                        
+                        # Visual comparison
+                        fig = go.Figure()
+                        fig.add_trace(go.Bar(
+                            name=user1,
+                            x=comp_df['Metric'],
+                            y=[float(comp_df[user1].iloc[i]) if i < 4 else comp_df[user1].iloc[i] for i in range(5)],
+                            marker_color='#25D366'
+                        ))
+                        fig.add_trace(go.Bar(
+                            name=user2,
+                            x=comp_df['Metric'],
+                            y=[float(comp_df[user2].iloc[i]) if i < 4 else comp_df[user2].iloc[i] for i in range(5)],
+                            marker_color='#128C7E'
+                        ))
+                        fig.update_layout(
+                            barmode='group',
+                            height=500,
+                            title=f"Comparison: {user1} vs {user2}",
+                            xaxis_title="Metric",
+                            yaxis_title="Value"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
 
                 # 8. Additional Insights (New Section)
                 progress_bar.progress(95)
@@ -760,6 +842,80 @@ if uploaded_file:
                         st.warning("LanguageTool is not available or failed to initialize. Please check requirements.")
                 except Exception as e:
                     st.error(f"Error during linguistic analysis: {e}")
+
+                # 13. Message Search Tool (New Interactive Feature)
+                st.markdown("---")
+                st.markdown("## 🔎 Search Messages")
+                st.markdown("Search for specific keywords or phrases in the chat history")
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    search_query = st.text_input(
+                        "Enter search term",
+                        placeholder="Type a word or phrase to search...",
+                        help="Search through all messages"
+                    )
+                with col2:
+                    search_user = st.selectbox(
+                        "Filter by user",
+                        ['All'] + [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']],
+                        key="search_user"
+                    )
+                
+                if search_query:
+                    # Filter messages
+                    search_df = df.copy()
+                    
+                    # Apply user filter if selected
+                    if search_user != 'All':
+                        search_df = search_df[search_df['user'] == search_user]
+                    
+                    # Search in messages (case-insensitive)
+                    mask = search_df['message'].str.contains(search_query, case=False, na=False)
+                    results = search_df[mask]
+                    
+                    if len(results) > 0:
+                        st.success(f"Found {len(results)} matching message(s)")
+                        
+                        # Display results with pagination
+                        page_size = st.selectbox("Results per page", [10, 20, 50, 100], index=1)
+                        total_pages = (len(results) - 1) // page_size + 1
+                        
+                        if total_pages > 1:
+                            page = st.slider("Page", 1, total_pages, 1)
+                            start_idx = (page - 1) * page_size
+                            end_idx = start_idx + page_size
+                            page_results = results.iloc[start_idx:end_idx]
+                        else:
+                            page_results = results
+                        
+                        # Highlight search term
+                        def highlight_term(msg):
+                            import re
+                            pattern = re.compile(re.escape(search_query), re.IGNORECASE)
+                            return pattern.sub(lambda m: f'<mark style="background-color: yellow; padding: 2px;">{m.group()}</mark>', str(msg))
+                        
+                        for idx, row in page_results.iterrows():
+                            highlighted_msg = highlight_term(row['message'])
+                            st.markdown(
+                                f"""<div class="feature-card" style="margin-bottom: 10px;">
+                                    <small><b>{row['user']}</b> | {row['date'].strftime('%d/%m/%y %I:%M %p')}</small><br>
+                                    {highlighted_msg}
+                                </div>""",
+                                unsafe_allow_html=True
+                            )
+                        
+                        # Download search results
+                        csv_results = results.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label=f"📥 Download {len(results)} Search Results (CSV)",
+                            data=csv_results,
+                            file_name=f"search_results_{search_query.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    else:
+                        st.info(f"No messages found containing '{search_query}'")
 
                 # Final progress update
                 progress_bar.progress(100)
