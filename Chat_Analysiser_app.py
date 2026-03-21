@@ -545,67 +545,6 @@ if uploaded_file:
                     else:
                         st.info("No emoji data available")
 
-                # 7.5 Interactive Comparison Tool (New Feature)
-                if len(df['user'].unique()) >= 2:
-                    st.markdown("## 🔍 Compare Users")
-                    st.markdown("Select two users to compare their activity patterns")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        user1 = st.selectbox(
-                            "First User",
-                            [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']],
-                            key="user1"
-                        )
-                    with col2:
-                        user2 = st.selectbox(
-                            "Second User",
-                            [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']]
-                            ,key="user2"
-                        )
-                    
-                    if user1 and user2 and user1 != user2:
-                        # Create comparison data
-                        comp_data = {
-                            'Metric': ['Total Messages', 'Total Words', 'Media Shared', 'Links Shared', 'Avg Words/Message'],
-                            user1: [],
-                            user2: []
-                        }
-                        
-                        for user in [user1, user2]:
-                            num, words, media, links = helper.fetch_stats(user, df)
-                            avg_words = words / num if num > 0 else 0
-                            if user == user1:
-                                comp_data[user] = [num, words, media, links, f"{avg_words:.1f}"]
-                            else:
-                                comp_data[user2] = [num, words, media, links, f"{avg_words:.1f}"]
-                        
-                        comp_df = pd.DataFrame(comp_data)
-                        st.dataframe(comp_df, use_container_width=True)
-                        
-                        # Visual comparison
-                        fig = go.Figure()
-                        fig.add_trace(go.Bar(
-                            name=user1,
-                            x=comp_df['Metric'],
-                            y=[float(comp_df[user1].iloc[i]) if i < 4 else comp_df[user1].iloc[i] for i in range(5)],
-                            marker_color='#25D366'
-                        ))
-                        fig.add_trace(go.Bar(
-                            name=user2,
-                            x=comp_df['Metric'],
-                            y=[float(comp_df[user2].iloc[i]) if i < 4 else comp_df[user2].iloc[i] for i in range(5)],
-                            marker_color='#128C7E'
-                        ))
-                        fig.update_layout(
-                            barmode='group',
-                            height=500,
-                            title=f"Comparison: {user1} vs {user2}",
-                            xaxis_title="Metric",
-                            yaxis_title="Value"
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-
                 # 8. Additional Insights (New Section)
                 progress_bar.progress(95)
                 status_text.text("🎯 Generating additional insights...")
