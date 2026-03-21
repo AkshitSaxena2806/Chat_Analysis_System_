@@ -805,83 +805,13 @@ if uploaded_file:
                             st.bar_chart(error_counts)
                         
                     else:
-                        st.warning("LanguageTool is not available or failed to initialize. Please check requirements.")
+                        # LanguageTool not available - skip this section entirely
+                        pass  # Do nothing, just skip linguistic analysis
                 except Exception as e:
-                    st.error(f"Error during linguistic analysis: {e}")
+                    # Log error but don't show to user
+                    logger.error(f"Linguistic analysis failed: {e}")
+                    pass  # Skip linguistic analysis silently
 
-                # 13. Message Search Tool (New Interactive Feature)
-                st.markdown("---")
-                st.markdown("## 🔎 Search Messages")
-                st.markdown("Search for specific keywords or phrases in the chat history")
-                
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    search_query = st.text_input(
-                        "Enter search term",
-                        placeholder="Type a word or phrase to search...",
-                        help="Search through all messages"
-                    )
-                with col2:
-                    search_user = st.selectbox(
-                        "Filter by user",
-                        ['All'] + [u for u in sorted(df['user'].unique()) if u not in ['System', 'group_notification']],
-                        key="search_user"
-                    )
-                
-                if search_query:
-                    # Filter messages
-                    search_df = df.copy()
-                    
-                    # Apply user filter if selected
-                    if search_user != 'All':
-                        search_df = search_df[search_df['user'] == search_user]
-                    
-                    # Search in messages (case-insensitive)
-                    mask = search_df['message'].str.contains(search_query, case=False, na=False)
-                    results = search_df[mask]
-                    
-                    if len(results) > 0:
-                        st.success(f"Found {len(results)} matching message(s)")
-                        
-                        # Display results with pagination
-                        page_size = st.selectbox("Results per page", [10, 20, 50, 100], index=1)
-                        total_pages = (len(results) - 1) // page_size + 1
-                        
-                        if total_pages > 1:
-                            page = st.slider("Page", 1, total_pages, 1)
-                            start_idx = (page - 1) * page_size
-                            end_idx = start_idx + page_size
-                            page_results = results.iloc[start_idx:end_idx]
-                        else:
-                            page_results = results
-                        
-                        # Highlight search term
-                        def highlight_term(msg):
-                            import re
-                            pattern = re.compile(re.escape(search_query), re.IGNORECASE)
-                            return pattern.sub(lambda m: f'<mark style="background-color: yellow; padding: 2px;">{m.group()}</mark>', str(msg))
-                        
-                        for idx, row in page_results.iterrows():
-                            highlighted_msg = highlight_term(row['message'])
-                            st.markdown(
-                                f"""<div class="feature-card" style="margin-bottom: 10px;">
-                                    <small><b>{row['user']}</b> | {row['date'].strftime('%d/%m/%y %I:%M %p')}</small><br>
-                                    {highlighted_msg}
-                                </div>""",
-                                unsafe_allow_html=True
-                            )
-                        
-                        # Download search results
-                        csv_results = results.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label=f"📥 Download {len(results)} Search Results (CSV)",
-                            data=csv_results,
-                            file_name=f"search_results_{search_query.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-                    else:
-                        st.info(f"No messages found containing '{search_query}'")
 
                 # Final progress update
                 progress_bar.progress(100)
