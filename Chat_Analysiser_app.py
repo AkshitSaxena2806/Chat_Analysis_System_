@@ -711,6 +711,8 @@ if uploaded_file:
                         total_errors = error_df['Total Errors'].sum()
                         grammar_err = error_df['Grammar'].sum() + error_df['Tense'].sum() + error_df['Agreement'].sum()
                         typos = error_df['Typo'].sum()
+                        articles = error_df['Article'].sum()
+                        fragments = error_df['Fragment'].sum()
                         avg_errors = total_errors / len(error_df) if len(error_df) > 0 else 0
                         
                         with col1:
@@ -718,9 +720,27 @@ if uploaded_file:
                         with col2:
                             st.markdown(f'<div class="metric-container"><div class="metric-value">{grammar_err}</div><div class="metric-label">Grammar Issues</div></div>', unsafe_allow_html=True)
                         with col3:
-                            st.markdown(f'<div class="metric-container"><div class="metric-value">{typos}</div><div class="metric-label">Typos/Spelling</div></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="metric-container"><div class="metric-value">{typos + articles + fragments}</div><div class="metric-label">Other Errors</div></div>', unsafe_allow_html=True)
                         with col4:
                             st.markdown(f'<div class="metric-container"><div class="metric-value">{avg_errors:.2f}</div><div class="metric-label">Errors/Message</div></div>', unsafe_allow_html=True)
+                        
+                        # Detailed breakdown
+                        st.markdown("### 📊 Error Breakdown")
+                        detail_col1, detail_col2, detail_col3 = st.columns(3)
+                        with detail_col1:
+                            st.metric("Tense Errors", error_df['Tense'].sum())
+                        with detail_col2:
+                            st.metric("Subject-Verb Agreement", error_df['Agreement'].sum())
+                        with detail_col3:
+                            st.metric("Article Usage", articles)
+                        
+                        detail_col4, detail_col5, detail_col6 = st.columns(3)
+                        with detail_col4:
+                            st.metric("Sentence Fragments", fragments)
+                        with detail_col5:
+                            st.metric("Typos/Spelling", typos)
+                        with detail_col6:
+                            st.metric("Other Grammar", error_df['Grammar'].sum())
                             
                         st.markdown("### 📝 Highlighted Messages")
                         st.info("Hover over the highlighted text to see the error details.")
@@ -739,13 +759,14 @@ if uploaded_file:
                         st.markdown("---")
                         st.markdown("## 🏷️ Error Tagging & Annotation Tool")
                         st.markdown("Manually tag messages for your linguistic study. The table below is interactive.")
+                        st.info("💡 **Tag categories:** Grammar, Vocabulary, Code-mixing, Pragmatic error, Spelling, Other")
                         
                         # Prepare tagging dataframe
                         tagging_df = error_df[['Date', 'User', 'Original Text']].copy()
                         tagging_df['Error Type'] = "None"
                         tagging_df['Notes'] = ""
                         
-                        categories = ["None", "Grammar", "Vocabulary", "Code-mixing", "Pragmatic error", "Spelling", "Other"]
+                        categories = ["None", "Grammar", "Vocabulary", "Code-mixing", "Pragmatic error", "Spelling", "Tense", "Agreement", "Article", "Fragment", "Other"]
                         
                         edited_df = st.data_editor(
                             tagging_df,
@@ -776,6 +797,12 @@ if uploaded_file:
                             mime="text/csv",
                             use_container_width=True
                         )
+                        
+                        # Export summary statistics
+                        st.markdown("### 📊 Annotation Summary")
+                        if len(edited_df[edited_df['Error Type'] != 'None']) > 0:
+                            error_counts = edited_df['Error Type'].value_counts()
+                            st.bar_chart(error_counts)
                         
                     else:
                         st.warning("LanguageTool is not available or failed to initialize. Please check requirements.")
