@@ -340,19 +340,41 @@ def detect_linguistic_errors(selected_user, df, timeout=30):
     """
     global lang_tool
     import streamlit as st
+    import subprocess
+    import shutil
     
     if not LANG_TOOL_AVAILABLE:
         logger.warning("LanguageTool module not available")
         return pd.DataFrame()
+    
+    # Check if Java is installed
+    def is_java_installed():
+        """Check if Java is available in system PATH"""
+        java_exec = shutil.which('java')
+        if java_exec:
+            try:
+                result = subprocess.run(['java', '-version'], 
+                                      capture_output=True, 
+                                      text=True, 
+                                      timeout=5)
+                return result.returncode == 0
+            except:
+                return False
+        return False
         
     if lang_tool is None:
+        if not is_java_installed():
+            # Return empty dataframe with clear message - don't show error in UI
+            logger.warning("Java not found. Linguistic analysis skipped.")
+            return pd.DataFrame()  # Just return empty, let UI handle messaging
+        
         try:
-            with st.spinner("Downloading/Loading LanguageTool (~250MB)... This happens only once and may take a few minutes!"):
+            with st.spinner("Initializing LanguageTool... This may take a moment."):
                 # Initialize LanguageTool without problematic config keys
                 lang_tool = language_tool_python.LanguageTool('en-US')
         except Exception as e:
             logger.error(f"Failed to load LanguageTool: {e}")
-            st.error(f"Failed to load LanguageTool. Ensure Java is installed. Error: {e}")
+            # Don't show st.error here - just return empty
             return pd.DataFrame()
 
     if lang_tool is None:
